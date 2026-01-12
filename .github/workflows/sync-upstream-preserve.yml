@@ -1,0 +1,285 @@
+name: Sync Upstream (Preserve Custom)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Upstream branch to sync"
+        required: true
+        type: choice
+        default: "dev-next"
+        options:
+          - dev-next
+          - main-next
+      dry_run:
+        description: "Dry run (don't push, only show what would happen)"
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # Check for upstream updates weekly on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+
+# ============================================================================
+# CUSTOM FILES CONFIGURATION
+# These files contain your customizations and will be preserved during sync
+# ============================================================================
+env:
+  # Custom protocol files (slim build)
+  CUSTOM_FILES: |
+    include/registry.go
+    include/quic.go
+    include/quic_stub.go
+  
+  # Custom workflow files (will be preserved entirely)
+  CUSTOM_WORKFLOWS: |
+    .github/workflows/build-slim.yml
+    .github/workflows/sync-upstream-preserve.yml
+
+jobs:
+  sync_upstream:
+    name: Sync with upstream (preserve customizations)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.branch || 'dev-next' }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/SagerNet/sing-box.git || true
+          git fetch upstream --tags
+
+      - name: Get sync info
+        id: sync_info
+        run: |
+          BRANCH="${{ inputs.branch || 'dev-next' }}"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          
+          # Get current and upstream commit info
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          UPSTREAM_COMMIT=$(git rev-parse upstream/${BRANCH})
+          
+          echo "current_commit=${CURRENT_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "upstream_commit=${UPSTREAM_COMMIT}" >> "$GITHUB_OUTPUT"
+          
+          # Check if we're behind upstream
+          BEHIND=$(git rev-list --count HEAD..upstream/${BRANCH})
+          AHEAD=$(git rev-list --count upstream/${BRANCH}..HEAD)
+          
+          echo "behind=${BEHIND}" >> "$GITHUB_OUTPUT"
+          echo "ahead=${AHEAD}" >> "$GITHUB_OUTPUT"
+          
+          echo "📊 Sync Status:"
+          echo "  Branch: ${BRANCH}"
+          echo "  Behind upstream: ${BEHIND} commits"
+          echo "  Ahead of upstream: ${AHEAD} commits (your custom commits)"
+          
+          if [ "$BEHIND" -eq 0 ]; then
+            echo "✅ Already up to date with upstream!"
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "📥 Updates available from upstream"
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show upstream changes
+        if: steps.sync_info.outputs.up_to_date == 'false'
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "=== 📝 New commits from upstream (last 30) ==="
+          git log --oneline HEAD..upstream/${BRANCH} | head -30
+          echo ""
+          echo "=== 📁 Files changed ==="
+          git diff --stat HEAD..upstream/${BRANCH} | tail -30
+
+      - name: Backup custom files
+        if: steps.sync_info.outputs.up_to_date == 'false'
+        id: backup
+        run: |
+          echo "📦 Backing up custom files..."
+          mkdir -p /tmp/custom_backup
+          mkdir -p /tmp/custom_backup/.github/workflows
+          
+          # Backup custom protocol files
+          for file in include/registry.go include/quic.go include/quic_stub.go; do
+            if [ -f "$file" ]; then
+              cp "$file" "/tmp/custom_backup/$file"
+              echo "  ✓ Backed up: $file"
+            fi
+          done
+          
+          # Backup custom workflow files
+          for file in .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml; do
+            if [ -f "$file" ]; then
+              cp "$file" "/tmp/custom_backup/$file"
+              echo "  ✓ Backed up: $file"
+            fi
+          done
+          
+          # List all backed up files
+          echo ""
+          echo "📋 Backed up files:"
+          find /tmp/custom_backup -type f
+          
+          echo "backup_created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check for conflicts in custom files
+        if: steps.sync_info.outputs.up_to_date == 'false'
+        id: conflict_check
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          CONFLICTS=""
+          
+          echo "🔍 Checking for upstream changes in custom files..."
+          
+          for file in include/registry.go include/quic.go include/quic_stub.go; do
+            # Check if this file was modified in upstream
+            if ! git diff --quiet HEAD..upstream/${BRANCH} -- "$file" 2>/dev/null; then
+              echo "  ⚠️  $file has changes in upstream"
+              CONFLICTS="${CONFLICTS}${file}\n"
+            else
+              echo "  ✓ $file unchanged in upstream"
+            fi
+          done
+          
+          if [ -n "$CONFLICTS" ]; then
+            echo ""
+            echo "⚠️  Some custom files have upstream changes."
+            echo "Your customizations will be preserved, but you may want to review upstream changes."
+            echo "has_conflicts=true" >> "$GITHUB_OUTPUT"
+            echo -e "conflict_files=${CONFLICTS}" >> "$GITHUB_OUTPUT"
+          else
+            echo ""
+            echo "✅ No conflicts in custom files"
+            echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream changes
+        if: steps.sync_info.outputs.up_to_date == 'false' && inputs.dry_run != true
+        id: merge
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "🔀 Merging upstream/${BRANCH}..."
+          
+          # Strategy: merge with accepting upstream for conflicts, then restore our files
+          if git merge upstream/${BRANCH} -X theirs -m "Merge upstream ${BRANCH}"; then
+            echo "merge_success=true" >> "$GITHUB_OUTPUT"
+            echo "✅ Merge successful!"
+          else
+            echo "merge_success=false" >> "$GITHUB_OUTPUT"
+            echo "❌ Merge failed, aborting..."
+            git merge --abort
+            exit 1
+          fi
+
+      - name: Restore custom files
+        if: steps.sync_info.outputs.up_to_date == 'false' && steps.backup.outputs.backup_created == 'true' && inputs.dry_run != true
+        run: |
+          echo "🔄 Restoring custom files..."
+          
+          # Restore custom protocol files
+          for file in include/registry.go include/quic.go include/quic_stub.go; do
+            if [ -f "/tmp/custom_backup/$file" ]; then
+              cp "/tmp/custom_backup/$file" "$file"
+              echo "  ✓ Restored: $file"
+            fi
+          done
+          
+          # Restore custom workflow files
+          for file in .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml; do
+            if [ -f "/tmp/custom_backup/$file" ]; then
+              cp "/tmp/custom_backup/$file" "$file"
+              echo "  ✓ Restored: $file"
+            fi
+          done
+          
+          echo ""
+          echo "✅ All custom files restored!"
+
+      - name: Commit restored custom files
+        if: steps.sync_info.outputs.up_to_date == 'false' && inputs.dry_run != true
+        run: |
+          # Check if there are changes to commit
+          if ! git diff --quiet; then
+            git add include/registry.go include/quic.go include/quic_stub.go
+            git add .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml 2>/dev/null || true
+            git commit -m "Restore custom slim protocol modifications after upstream sync"
+            echo "✅ Custom changes committed"
+          else
+            echo "ℹ️  No additional changes to commit"
+          fi
+
+      - name: Show final diff
+        if: steps.sync_info.outputs.up_to_date == 'false'
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "=== 📊 Final state ==="
+          echo "Commits ahead of upstream after sync:"
+          git log --oneline upstream/${BRANCH}..HEAD
+
+      - name: Push changes
+        if: steps.sync_info.outputs.up_to_date == 'false' && inputs.dry_run != true
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          git push origin ${BRANCH}
+          echo "✅ Changes pushed to origin/${BRANCH}"
+
+      - name: Dry run summary
+        if: inputs.dry_run == true && steps.sync_info.outputs.up_to_date == 'false'
+        run: |
+          echo ""
+          echo "🔍 DRY RUN - No changes were made"
+          echo ""
+          echo "What would happen:"
+          echo "  1. Merge ${{ steps.sync_info.outputs.behind }} commits from upstream"
+          echo "  2. Restore custom files (include/registry.go, include/quic.go, etc.)"
+          echo "  3. Commit and push changes"
+          echo ""
+          echo "Run again with dry_run=false to apply changes"
+
+      - name: Create sync summary
+        if: always()
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          
+          echo "## 🔄 Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${BRANCH}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Was behind | ${{ steps.sync_info.outputs.behind }} commits |" >> $GITHUB_STEP_SUMMARY
+          echo "| Custom commits | ${{ steps.sync_info.outputs.ahead }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dry run | ${{ inputs.dry_run || 'false' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.sync_info.outputs.up_to_date }}" == "true" ]; then
+            echo "✅ **Already up to date with upstream!**" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo "🔍 **Dry run completed** - no changes were made" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Synced successfully!** Custom files preserved:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "- \`include/registry.go\` (slim protocols)" >> $GITHUB_STEP_SUMMARY
+            echo "- \`include/quic.go\` (slim QUIC protocols)" >> $GITHUB_STEP_SUMMARY
+            echo "- \`include/quic_stub.go\` (slim QUIC stubs)" >> $GITHUB_STEP_SUMMARY
+            echo "- \`.github/workflows/build-slim.yml\` (multi-platform build)" >> $GITHUB_STEP_SUMMARY
+            echo "- \`.github/workflows/sync-upstream-preserve.yml\` (this workflow)" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "${{ steps.conflict_check.outputs.has_conflicts }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Note:** Some custom files had upstream changes. Your customizations were preserved, but you may want to review:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+            echo "git diff upstream/${BRANCH} -- include/registry.go include/quic.go include/quic_stub.go" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          fi
