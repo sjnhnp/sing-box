@@ -4,12 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Specific version to build (e.g., 1.13.0-alpha.36). Leave empty to use latest pre-release."
+        description: "Version to build (e.g., 1.13.0-beta.4 or 1.12.15). Do NOT include 'v' prefix. Leave empty for latest pre-release."
         required: false
         type: string
-  schedule:
-    # Run daily at 00:00 UTC to check for new pre-releases
-    - cron: '0 0 * * *'
+  # Removed: schedule - manual trigger only
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
