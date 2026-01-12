@@ -1,0 +1,463 @@
+name: Build Slim (Multi-Platform)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Specific version to build (e.g., 1.13.0-alpha.36). Leave empty to use latest pre-release."
+        required: false
+        type: string
+  schedule:
+    # Run daily at 00:00 UTC to check for new pre-releases
+    - cron: '0 0 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# ============================================================================
+# SLIM BUILD CONFIGURATION
+# Only includes protocols you use:
+#   ✅ vless, vmess, trojan, shadowsocks, hysteria2, naive
+# Removed protocols:
+#   ❌ tor, ssh, shadowtls, anytls, tuic, hysteria v1, wireguard, tailscale
+# ============================================================================
+
+env:
+  # Slim build tags - removed with_wireguard, with_tailscale, with_dhcp, with_acme, with_ccm, with_ocm
+  SLIM_TAGS: "with_gvisor,with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0"
+  SLIM_TAGS_NAIVE: "with_gvisor,with_quic,with_utls,with_clash_api,with_naive_outbound,badlinkname,tfogo_checklinkname0"
+
+jobs:
+  get_latest_version:
+    name: Get latest sing-box version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      tag: ${{ steps.get_version.outputs.tag }}
+    steps:
+      - name: Get latest pre-release version from upstream
+        id: get_version
+        run: |
+          set -euo pipefail
+          
+          if [ -n "${{ inputs.version }}" ]; then
+            # Use user-specified version
+            VERSION="${{ inputs.version }}"
+            TAG="v${VERSION}"
+            echo "Using user-specified version: ${VERSION}"
+          else
+            # Get the latest pre-release from SagerNet/sing-box
+            echo "Fetching latest pre-release from SagerNet/sing-box..."
+            RELEASE_INFO=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases" | jq -r '[.[] | select(.prerelease == true)] | .[0]')
+            
+            if [ "$RELEASE_INFO" == "null" ] || [ -z "$RELEASE_INFO" ]; then
+              echo "No pre-release found, falling back to latest release"
+              RELEASE_INFO=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases/latest")
+            fi
+            
+            TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
+            VERSION=$(echo "$TAG" | sed 's/^v//')
+            echo "Latest pre-release: ${TAG}"
+          fi
+          
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Will build sing-box version: ${VERSION} (tag: ${TAG})"
+
+  # ============================================================================
+  # ANDROID BUILD (arm64-v8a with Naive)
+  # ============================================================================
+  build_android:
+    name: Build Android APK (arm64-v8a)
+    runs-on: ubuntu-latest
+    needs:
+      - get_latest_version
+    steps:
+      - name: Checkout this repo (for custom include files)
+        uses: actions/checkout@v4
+        with:
+          path: custom
+
+      - name: Checkout upstream sing-box
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: ${{ needs.get_latest_version.outputs.tag }}
+          fetch-depth: 0
+          submodules: 'recursive'
+          path: sing-box
+
+      - name: Apply custom slim protocol modifications
+        run: |
+          # Copy our customized include files to remove unused protocols
+          cp custom/include/registry.go sing-box/include/registry.go
+          cp custom/include/quic.go sing-box/include/quic.go
+          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+          echo "Applied custom slim protocol modifications"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.25.5
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28
+          local-cache: true
+
+      - name: Setup OpenJDK
+        run: |-
+          sudo apt update && sudo apt install -y openjdk-17-jdk-headless
+          /usr/lib/jvm/java-17-openjdk-amd64/bin/java --version
+
+      - name: Set tag
+        working-directory: sing-box
+        run: |-
+          git tag v${{ needs.get_latest_version.outputs.version }} -f || true
+
+      - name: Build library (slim with naive)
+        working-directory: sing-box
+        run: |-
+          make lib_install
+          export PATH="$PATH:$(go env GOPATH)/bin"
+          
+          VERSION="${{ needs.get_latest_version.outputs.version }}"
+          TAGS="${{ env.SLIM_TAGS_NAIVE }},with_conntrack"
+          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
+          
+          gomobile bind -v \
+            -o libbox.aar \
+            -target android/arm64 \
+            -androidapi 23 \
+            -javapkg=io.nekohasekai \
+            -libname=box \
+            -trimpath \
+            -buildvcs=false \
+            -ldflags "${LDFLAGS}" \
+            -tags "${TAGS}" \
+            ./experimental/libbox
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Checkout dev branch for Android client
+        working-directory: sing-box
+        run: |-
+          cd clients/android
+          git fetch origin dev
+          git checkout dev
+
+      - name: Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle
+          key: gradle-android-slim-${{ hashFiles('sing-box/clients/android/**/*.gradle*') }}
+
+      - name: Update version in Android client
+        working-directory: sing-box
+        run: |-
+          VERSION="${{ needs.get_latest_version.outputs.version }}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH_FULL=$(echo "$VERSION" | cut -d. -f3)
+          PATCH=$(echo "$PATCH_FULL" | cut -d- -f1)
+          PRERELEASE_NUM=0
+          if echo "$VERSION" | grep -q "alpha\|beta"; then
+            PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
+          fi
+          VERSION_CODE=$((MAJOR * 10000000 + MINOR * 100000 + PATCH * 1000 + PRERELEASE_NUM))
+          
+          echo "VERSION_CODE=${VERSION_CODE}" > clients/android/version.properties
+          echo "VERSION_NAME=${VERSION}" >> clients/android/version.properties
+          cat clients/android/version.properties
+
+      - name: Setup signing keystore
+        working-directory: sing-box
+        run: |-
+          cd clients/android
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+          cat > local.properties << EOF
+          KEYSTORE_PASS=${{ secrets.KEYSTORE_PASSWORD }}
+          ALIAS_NAME=${{ secrets.KEY_ALIAS }}
+          ALIAS_PASS=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Modify build.gradle.kts for arm64 only
+        working-directory: sing-box
+        run: |-
+          cd clients/android/app
+          sed -i 's/include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")/include("arm64-v8a")/' build.gradle.kts
+          sed -i 's/isUniversalApk = true/isUniversalApk = false/' build.gradle.kts
+
+      - name: Build APK
+        working-directory: sing-box
+        run: |-
+          mkdir -p clients/android/app/libs
+          cp libbox.aar clients/android/app/libs/
+          cp libbox.aar clients/android/app/libs/libbox-legacy.aar
+          cd clients/android
+          ./gradlew :app:assembleOtherRelease --no-daemon
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Prepare artifacts
+        run: |-
+          mkdir -p dist
+          find sing-box/clients/android/app/build/outputs/apk/other/release -name "*.apk" -exec cp {} dist/ \;
+          cd dist
+          for apk in *.apk; do
+            if [ -f "$apk" ]; then
+              mv "$apk" "sing-box-${{ needs.get_latest_version.outputs.version }}-android-arm64-slim.apk"
+              break
+            fi
+          done
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64-slim
+          path: 'dist'
+
+  # ============================================================================
+  # WINDOWS BUILD (amd64, arm64 with Naive + libcronet.dll)
+  # ============================================================================
+  build_windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs:
+      - get_latest_version
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64 }
+          - { arch: arm64 }
+    steps:
+      - name: Checkout this repo (for custom include files)
+        uses: actions/checkout@v4
+        with:
+          path: custom
+
+      - name: Checkout upstream sing-box
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: ${{ needs.get_latest_version.outputs.tag }}
+          fetch-depth: 0
+          path: sing-box
+
+      - name: Apply custom slim protocol modifications
+        run: |
+          Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
+          Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
+          Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+          Write-Host "Applied custom slim protocol modifications"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.25.5
+
+      - name: Set tag
+        working-directory: sing-box
+        run: |-
+          git tag v${{ needs.get_latest_version.outputs.version }} -f
+
+      - name: Build (slim with naive)
+        working-directory: sing-box
+        run: |
+          mkdir -p dist
+          $env:CGO_ENABLED = "0"
+          $env:GOOS = "windows"
+          $env:GOARCH = "${{ matrix.arch }}"
+          
+          # Build with slim tags + naive + purego (for Windows without CGO)
+          $TAGS = "${{ env.SLIM_TAGS_NAIVE }},with_purego"
+          
+          go build -v -trimpath -o dist/sing-box.exe -tags "$TAGS" `
+            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ needs.get_latest_version.outputs.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
+            ./cmd/sing-box
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract libcronet.dll
+        working-directory: sing-box
+        run: |
+          $CRONET_GO_VERSION = Get-Content .github/CRONET_GO_VERSION
+          $env:CGO_ENABLED = "0"
+          go run -v "github.com/sagernet/cronet-go/cmd/build-naive@$CRONET_GO_VERSION" extract-lib --target windows/${{ matrix.arch }} -o dist
+
+      - name: Archive
+        working-directory: sing-box
+        run: |
+          $DIR_NAME = "sing-box-${{ needs.get_latest_version.outputs.version }}-windows-${{ matrix.arch }}-slim"
+          mkdir "dist/$DIR_NAME"
+          Copy-Item LICENSE "dist/$DIR_NAME"
+          Copy-Item "dist/sing-box.exe" "dist/$DIR_NAME"
+          Copy-Item "dist/libcronet.dll" "dist/$DIR_NAME"
+          Compress-Archive -Path "dist/$DIR_NAME" -DestinationPath "dist/$DIR_NAME.zip"
+          Remove-Item -Recurse "dist/$DIR_NAME"
+          Remove-Item "dist/sing-box.exe", "dist/libcronet.dll"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-${{ matrix.arch }}-slim
+          path: "sing-box/dist"
+
+  # ============================================================================
+  # MACOS BUILD (amd64, arm64 with Naive)
+  # ============================================================================
+  build_macos:
+    name: Build macOS
+    runs-on: macos-latest
+    needs:
+      - get_latest_version
+    strategy:
+      matrix:
+        include:
+          - { arch: amd64, name: intel }
+          - { arch: arm64, name: apple-silicon }
+    steps:
+      - name: Checkout this repo (for custom include files)
+        uses: actions/checkout@v4
+        with:
+          path: custom
+
+      - name: Checkout upstream sing-box
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: ${{ needs.get_latest_version.outputs.tag }}
+          fetch-depth: 0
+          path: sing-box
+
+      - name: Apply custom slim protocol modifications
+        run: |
+          cp custom/include/registry.go sing-box/include/registry.go
+          cp custom/include/quic.go sing-box/include/quic.go
+          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+          echo "Applied custom slim protocol modifications"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ^1.25.5
+
+      - name: Set tag
+        working-directory: sing-box
+        run: |-
+          git tag v${{ needs.get_latest_version.outputs.version }} -f
+
+      - name: Build (slim with naive)
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          mkdir -p dist
+          
+          # macOS supports CGO, so we can build with naive directly
+          TAGS="${{ env.SLIM_TAGS_NAIVE }}"
+          
+          go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ needs.get_latest_version.outputs.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            ./cmd/sing-box
+        env:
+          CGO_ENABLED: "1"
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Archive
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          DIR_NAME="sing-box-${{ needs.get_latest_version.outputs.version }}-darwin-${{ matrix.arch }}-slim"
+          cd dist
+          mkdir -p "${DIR_NAME}"
+          cp ../LICENSE "${DIR_NAME}"
+          cp sing-box "${DIR_NAME}"
+          tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
+          rm -r "${DIR_NAME}" sing-box
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-slim
+          path: "sing-box/dist"
+
+  # ============================================================================
+  # CREATE RELEASE
+  # ============================================================================
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs:
+      - get_latest_version
+      - build_android
+      - build_windows
+      - build_macos
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name "*.apk" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.get_latest_version.outputs.version }}-slim
+          name: sing-box v${{ needs.get_latest_version.outputs.version }} Slim Build
+          body: |
+            ## sing-box Slim Build - Multi-Platform Release
+
+            **Based on upstream sing-box ${{ needs.get_latest_version.outputs.tag }}** from [SagerNet/sing-box](https://github.com/SagerNet/sing-box/releases/tag/${{ needs.get_latest_version.outputs.tag }})
+
+            ### 📦 Downloads
+
+            | Platform | Architecture | File |
+            |----------|--------------|------|
+            | Android | arm64-v8a | `sing-box-${{ needs.get_latest_version.outputs.version }}-android-arm64-slim.apk` |
+            | Windows | amd64 | `sing-box-${{ needs.get_latest_version.outputs.version }}-windows-amd64-slim.zip` |
+            | Windows | arm64 | `sing-box-${{ needs.get_latest_version.outputs.version }}-windows-arm64-slim.zip` |
+            | macOS | Intel (amd64) | `sing-box-${{ needs.get_latest_version.outputs.version }}-darwin-amd64-slim.tar.gz` |
+            | macOS | Apple Silicon (arm64) | `sing-box-${{ needs.get_latest_version.outputs.version }}-darwin-arm64-slim.tar.gz` |
+
+            ### ✅ Included Protocols
+            - VLESS (with Reality support)
+            - VMess
+            - Trojan
+            - Shadowsocks
+            - Hysteria2
+            - **NaiveProxy** (Windows includes `libcronet.dll`)
+
+            ### ❌ Removed Protocols (to reduce binary size)
+            - Tor, SSH, ShadowTLS, AnyTLS
+            - TUIC, Hysteria v1
+            - WireGuard, Tailscale
+
+            ### 📋 Features
+            - gVisor (TUN stack)
+            - QUIC
+            - uTLS
+            - Clash API
+
+            ### 📝 Notes
+            - **Windows**: `libcronet.dll` is included for NaiveProxy support. Place it in the same directory as `sing-box.exe`.
+            - **macOS**: NaiveProxy works natively without additional files.
+            - **Android**: Min SDK 23 (Android 6.0+), arm64 only.
+
+            This is a slim build optimized for specific use cases. If you need WireGuard, Tailscale, or other removed protocols, use the [official sing-box release](https://github.com/SagerNet/sing-box/releases).
+          draft: false
+          prerelease: true
+          files: release/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
