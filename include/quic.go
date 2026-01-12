@@ -7,22 +7,22 @@ import (
 	"github.com/sagernet/sing-box/adapter/outbound"
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/dns/transport/quic"
-	"github.com/sagernet/sing-box/protocol/hysteria"
+	// Removed: hysteria v1 - not used
 	"github.com/sagernet/sing-box/protocol/hysteria2"
 	_ "github.com/sagernet/sing-box/protocol/naive/quic"
-	"github.com/sagernet/sing-box/protocol/tuic"
+	// Removed: tuic - not used
 	_ "github.com/sagernet/sing-box/transport/v2rayquic"
 )
 
 func registerQUICInbounds(registry *inbound.Registry) {
-	hysteria.RegisterInbound(registry)
-	tuic.RegisterInbound(registry)
+	// Removed: hysteria.RegisterInbound(registry) - not used
+	// Removed: tuic.RegisterInbound(registry) - not used
 	hysteria2.RegisterInbound(registry)
 }
 
 func registerQUICOutbounds(registry *outbound.Registry) {
-	hysteria.RegisterOutbound(registry)
-	tuic.RegisterOutbound(registry)
+	// Removed: hysteria.RegisterOutbound(registry) - not used
+	// Removed: tuic.RegisterOutbound(registry) - not used
 	hysteria2.RegisterOutbound(registry)
 }
 

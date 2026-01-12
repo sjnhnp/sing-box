@@ -87,7 +87,7 @@ jobs:
         run: |-
           git tag v${{ needs.get_latest_version.outputs.version }} -f || true
 
-      - name: Build library (with naive support)
+      - name: Build library (with naive support, slim protocols)
         run: |-
           make lib_install
           export PATH="$PATH:$(go env GOPATH)/bin"
@@ -99,7 +99,12 @@ jobs:
           # Using gomobile directly to skip building unnecessary libbox-legacy.aar
           # This saves ~50% of library build time
           
-          TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_conntrack,with_tailscale,badlinkname,tfogo_checklinkname0"
+          # SLIM BUILD: Only includes protocols you use:
+          # - vless, vmess, trojan, shadowsocks, hysteria2, naive
+          # Removed protocols: tor, ssh, shadowtls, anytls, tuic, hysteria v1
+          # Removed features: wireguard, tailscale
+          
+          TAGS="with_gvisor,with_quic,with_utls,with_naive_outbound,with_clash_api,with_conntrack,badlinkname,tfogo_checklinkname0"
           LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
           
           gomobile bind -v \
@@ -247,10 +252,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.get_latest_version.outputs.version }}-naive
-          name: SFA v${{ needs.get_latest_version.outputs.version }} with Naive
+          tag_name: v${{ needs.get_latest_version.outputs.version }}-naive-slim
+          name: SFA v${{ needs.get_latest_version.outputs.version }} Slim (Naive)
           body: |
-            ## Android APK with NaiveProxy Support
+            ## Android APK - Slim Build with NaiveProxy Support
 
             **Based on upstream sing-box ${{ needs.get_latest_version.outputs.tag }}** from [SagerNet/sing-box](https://github.com/SagerNet/sing-box/releases/tag/${{ needs.get_latest_version.outputs.tag }})
 
@@ -260,21 +265,36 @@ jobs:
             - **Min SDK**: 23 (Android 6.0+)
             - **Flavor**: other (FOSS/GitHub release)
 
+            ### ✅ Included Protocols
+            - VLESS (with Reality support)
+            - VMess
+            - Trojan
+            - Shadowsocks
+            - Hysteria2
+            - NaiveProxy
+
+            ### ❌ Removed Protocols (to reduce APK size)
+            - Tor
+            - SSH
+            - ShadowTLS
+            - AnyTLS
+            - TUIC
+            - Hysteria v1
+            - WireGuard
+            - Tailscale
+
             ### Features
-            All standard sing-box features plus NaiveProxy outbound support:
             - gVisor (TUN stack)
             - QUIC
-            - WireGuard
             - uTLS
             - Clash API
-            - Tailscale
             - **NaiveProxy outbound**
 
             ### Installation
             Download `SFA-${{ needs.get_latest_version.outputs.version }}-arm64-v8a-naive.apk` and install on your Android device (Android 6.0+, arm64 only).
 
             ### Note
-            This build automatically uses the latest pre-release from the official sing-box repository.
+            This is a slim build optimized for specific use cases. If you need WireGuard, Tailscale, or other removed protocols, use the official sing-box release.
           draft: false
           prerelease: true
           files: |

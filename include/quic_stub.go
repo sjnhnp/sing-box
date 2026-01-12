@@ -35,12 +35,7 @@ func init() {
 }
 
 func registerQUICInbounds(registry *inbound.Registry) {
-	inbound.Register[option.HysteriaInboundOptions](registry, C.TypeHysteria, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.HysteriaInboundOptions) (adapter.Inbound, error) {
-		return nil, C.ErrQUICNotIncluded
-	})
-	inbound.Register[option.TUICInboundOptions](registry, C.TypeTUIC, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TUICInboundOptions) (adapter.Inbound, error) {
-		return nil, C.ErrQUICNotIncluded
-	})
+	// Removed: hysteria v1 and tuic - not used
 	inbound.Register[option.Hysteria2InboundOptions](registry, C.TypeHysteria2, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.Hysteria2InboundOptions) (adapter.Inbound, error) {
 		return nil, C.ErrQUICNotIncluded
 	})
@@ -50,12 +45,7 @@ func registerQUICInbounds(registry *inbound.Registry) {
 }
 
 func registerQUICOutbounds(registry *outbound.Registry) {
-	outbound.Register[option.HysteriaOutboundOptions](registry, C.TypeHysteria, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.HysteriaOutboundOptions) (adapter.Outbound, error) {
-		return nil, C.ErrQUICNotIncluded
-	})
-	outbound.Register[option.TUICOutboundOptions](registry, C.TypeTUIC, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.TUICOutboundOptions) (adapter.Outbound, error) {
-		return nil, C.ErrQUICNotIncluded
-	})
+	// Removed: hysteria v1 and tuic - not used
 	outbound.Register[option.Hysteria2OutboundOptions](registry, C.TypeHysteria2, func(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.Hysteria2OutboundOptions) (adapter.Outbound, error) {
 		return nil, C.ErrQUICNotIncluded
 	})

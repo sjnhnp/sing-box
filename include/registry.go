@@ -17,7 +17,7 @@ import (
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	"github.com/sagernet/sing-box/protocol/anytls"
+	// Removed: anytls - not used
 	"github.com/sagernet/sing-box/protocol/block"
 	"github.com/sagernet/sing-box/protocol/direct"
 	protocolDNS "github.com/sagernet/sing-box/protocol/dns"
@@ -27,10 +27,10 @@ import (
 	"github.com/sagernet/sing-box/protocol/naive"
 	"github.com/sagernet/sing-box/protocol/redirect"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
-	"github.com/sagernet/sing-box/protocol/shadowtls"
+	// Removed: shadowtls - not used
 	"github.com/sagernet/sing-box/protocol/socks"
-	"github.com/sagernet/sing-box/protocol/ssh"
-	"github.com/sagernet/sing-box/protocol/tor"
+	// Removed: ssh - not used
+	// Removed: tor - not used
 	"github.com/sagernet/sing-box/protocol/trojan"
 	"github.com/sagernet/sing-box/protocol/tun"
 	"github.com/sagernet/sing-box/protocol/vless"
@@ -60,9 +60,9 @@ func InboundRegistry() *inbound.Registry {
 	vmess.RegisterInbound(registry)
 	trojan.RegisterInbound(registry)
 	naive.RegisterInbound(registry)
-	shadowtls.RegisterInbound(registry)
+	// Removed: shadowtls.RegisterInbound(registry) - not used
 	vless.RegisterInbound(registry)
-	anytls.RegisterInbound(registry)
+	// Removed: anytls.RegisterInbound(registry) - not used
 
 	registerQUICInbounds(registry)
 	registerStubForRemovedInbounds(registry)
@@ -87,11 +87,11 @@ func OutboundRegistry() *outbound.Registry {
 	vmess.RegisterOutbound(registry)
 	trojan.RegisterOutbound(registry)
 	registerNaiveOutbound(registry)
-	tor.RegisterOutbound(registry)
-	ssh.RegisterOutbound(registry)
-	shadowtls.RegisterOutbound(registry)
+	// Removed: tor.RegisterOutbound(registry) - not used
+	// Removed: ssh.RegisterOutbound(registry) - not used
+	// Removed: shadowtls.RegisterOutbound(registry) - not used
 	vless.RegisterOutbound(registry)
-	anytls.RegisterOutbound(registry)
+	// Removed: anytls.RegisterOutbound(registry) - not used
 
 	registerQUICOutbounds(registry)
 	registerWireGuardOutbound(registry)
