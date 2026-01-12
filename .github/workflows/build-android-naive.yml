@@ -91,9 +91,28 @@ jobs:
         run: |-
           make lib_install
           export PATH="$PATH:$(go env GOPATH)/bin"
-          # Build libbox.aar with naive support (SDK 23, includes with_naive_outbound)
-          # Build arm64 only for faster builds
-          go run ./cmd/internal/build_libbox -target android -platform android/arm64
+          
+          # Get current version for ldflags
+          VERSION="${{ needs.get_latest_version.outputs.version }}"
+          
+          # Build ONLY libbox.aar with naive support (SDK 23, arm64 only)
+          # Using gomobile directly to skip building unnecessary libbox-legacy.aar
+          # This saves ~50% of library build time
+          
+          TAGS="with_gvisor,with_quic,with_wireguard,with_utls,with_naive_outbound,with_clash_api,with_conntrack,with_tailscale,badlinkname,tfogo_checklinkname0"
+          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
+          
+          gomobile bind -v \
+            -o libbox.aar \
+            -target android/arm64 \
+            -androidapi 23 \
+            -javapkg=io.nekohasekai \
+            -libname=box \
+            -trimpath \
+            -buildvcs=false \
+            -ldflags "${LDFLAGS}" \
+            -tags "${TAGS}" \
+            ./experimental/libbox
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
