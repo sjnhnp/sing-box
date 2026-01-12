@@ -125,6 +125,12 @@ jobs:
             fi
           done
           
+          # Backup README.md
+          if [ -f "README.md" ]; then
+            cp "README.md" "/tmp/custom_backup/README.md"
+            echo "  ✓ Backed up: README.md"
+          fi
+          
           # List all backed up files
           echo ""
           echo "📋 Backed up files:"
@@ -202,6 +208,12 @@ jobs:
             fi
           done
           
+          # Restore README.md
+          if [ -f "/tmp/custom_backup/README.md" ]; then
+            cp "/tmp/custom_backup/README.md" "README.md"
+            echo "  ✓ Restored: README.md"
+          fi
+          
           echo ""
           echo "✅ All custom files restored!"
 
@@ -212,7 +224,8 @@ jobs:
           if ! git diff --quiet; then
             git add include/registry.go include/quic.go include/quic_stub.go
             git add .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml 2>/dev/null || true
-            git commit -m "Restore custom slim protocol modifications after upstream sync"
+            git add README.md 2>/dev/null || true
+            git commit -m "Restore custom modifications after upstream sync"
             echo "✅ Custom changes committed"
           else
             echo "ℹ️  No additional changes to commit"

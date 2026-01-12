@@ -19,6 +19,9 @@ description: 同步上游 sing-box 代码，保留自定义精简协议配置
 - `.github/workflows/build-slim.yml` - 多平台精简构建
 - `.github/workflows/sync-upstream-preserve.yml` - GitHub Actions 同步工作流
 
+**其他自定义文件：**
+- `README.md` - 自定义项目说明
+
 ## 执行步骤
 
 ### 1. 备份自定义文件
@@ -26,11 +29,13 @@ description: 同步上游 sing-box 代码，保留自定义精简协议配置
 // turbo
 ```bash
 mkdir -p /tmp/sing-box-backup
+mkdir -p /tmp/sing-box-backup/.github/workflows
 cp include/registry.go /tmp/sing-box-backup/
 cp include/quic.go /tmp/sing-box-backup/
 cp include/quic_stub.go /tmp/sing-box-backup/
-cp .github/workflows/build-slim.yml /tmp/sing-box-backup/
-cp .github/workflows/sync-upstream-preserve.yml /tmp/sing-box-backup/
+cp .github/workflows/build-slim.yml /tmp/sing-box-backup/.github/workflows/
+cp .github/workflows/sync-upstream-preserve.yml /tmp/sing-box-backup/.github/workflows/
+cp README.md /tmp/sing-box-backup/
 echo "✅ 自定义文件已备份到 /tmp/sing-box-backup/"
 ```
 
@@ -90,8 +95,9 @@ git merge upstream/dev-next -X theirs -m "Merge upstream dev-next"
 cp /tmp/sing-box-backup/registry.go include/registry.go
 cp /tmp/sing-box-backup/quic.go include/quic.go
 cp /tmp/sing-box-backup/quic_stub.go include/quic_stub.go
-cp /tmp/sing-box-backup/build-slim.yml .github/workflows/build-slim.yml
-cp /tmp/sing-box-backup/sync-upstream-preserve.yml .github/workflows/sync-upstream-preserve.yml
+cp /tmp/sing-box-backup/.github/workflows/build-slim.yml .github/workflows/build-slim.yml
+cp /tmp/sing-box-backup/.github/workflows/sync-upstream-preserve.yml .github/workflows/sync-upstream-preserve.yml
+cp /tmp/sing-box-backup/README.md README.md
 echo "✅ 自定义文件已恢复"
 ```
 
@@ -111,7 +117,8 @@ git diff upstream/dev-next -- include/registry.go
 ```bash
 git add include/registry.go include/quic.go include/quic_stub.go
 git add .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml
-git commit -m "Restore custom slim protocol modifications after upstream sync"
+git add README.md
+git commit -m "Restore custom modifications after upstream sync"
 ```
 
 ### 9. 推送到远程仓库
