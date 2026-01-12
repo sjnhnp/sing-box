@@ -87,9 +87,9 @@ func OutboundRegistry() *outbound.Registry {
 	vmess.RegisterOutbound(registry)
 	trojan.RegisterOutbound(registry)
 	registerNaiveOutbound(registry)
-	tor.RegisterOutbound(registry)
-	ssh.RegisterOutbound(registry)
-	shadowtls.RegisterOutbound(registry)
+	// Removed: tor.RegisterOutbound(registry) - not used
+	// Removed: ssh.RegisterOutbound(registry) - not used
+	// Removed: shadowtls.RegisterOutbound(registry) - not used
 	vless.RegisterOutbound(registry)
 	// Removed: anytls.RegisterOutbound(registry) - not used
 
