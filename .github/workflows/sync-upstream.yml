@@ -1,0 +1,162 @@
+name: Sync Upstream
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Upstream branch to sync (dev-next or main-next)"
+        required: true
+        type: choice
+        default: "dev-next"
+        options:
+          - dev-next
+          - main-next
+      strategy:
+        description: "Merge strategy"
+        required: true
+        type: choice
+        default: "merge"
+        options:
+          - merge
+          - rebase
+          - reset
+  schedule:
+    # Check for upstream updates weekly on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+
+jobs:
+  sync_upstream:
+    name: Sync with upstream SagerNet/sing-box
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/SagerNet/sing-box.git || true
+          git fetch upstream
+
+      - name: Get sync info
+        id: sync_info
+        run: |
+          BRANCH="${{ inputs.branch || 'dev-next' }}"
+          echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+          
+          # Get current and upstream commit info
+          CURRENT_COMMIT=$(git rev-parse HEAD)
+          UPSTREAM_COMMIT=$(git rev-parse upstream/${BRANCH})
+          
+          echo "current_commit=${CURRENT_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "upstream_commit=${UPSTREAM_COMMIT}" >> "$GITHUB_OUTPUT"
+          
+          # Check if we're behind upstream
+          BEHIND=$(git rev-list --count HEAD..upstream/${BRANCH})
+          AHEAD=$(git rev-list --count upstream/${BRANCH}..HEAD)
+          
+          echo "behind=${BEHIND}" >> "$GITHUB_OUTPUT"
+          echo "ahead=${AHEAD}" >> "$GITHUB_OUTPUT"
+          
+          echo "Current branch: ${BRANCH}"
+          echo "Behind upstream: ${BEHIND} commits"
+          echo "Ahead of upstream: ${AHEAD} commits"
+          
+          if [ "$BEHIND" -eq 0 ]; then
+            echo "Already up to date with upstream!"
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Show upstream changes
+        if: steps.sync_info.outputs.up_to_date == 'false'
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "=== New commits from upstream ==="
+          git log --oneline HEAD..upstream/${BRANCH} | head -20
+          echo ""
+          echo "=== Files changed ==="
+          git diff --stat HEAD..upstream/${BRANCH} | tail -20
+
+      - name: Merge upstream (merge strategy)
+        if: steps.sync_info.outputs.up_to_date == 'false' && (inputs.strategy == 'merge' || inputs.strategy == '')
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "Merging upstream/${BRANCH} into ${BRANCH}..."
+          
+          # Try to merge, if conflicts occur, abort and report
+          if ! git merge upstream/${BRANCH} -m "Merge upstream ${BRANCH}"; then
+            echo "::error::Merge conflict detected! Please resolve manually."
+            git merge --abort
+            exit 1
+          fi
+          
+          echo "Merge successful!"
+
+      - name: Rebase on upstream (rebase strategy)
+        if: steps.sync_info.outputs.up_to_date == 'false' && inputs.strategy == 'rebase'
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "Rebasing on upstream/${BRANCH}..."
+          
+          # Try to rebase, if conflicts occur, abort and report
+          if ! git rebase upstream/${BRANCH}; then
+            echo "::error::Rebase conflict detected! Please resolve manually."
+            git rebase --abort
+            exit 1
+          fi
+          
+          echo "Rebase successful!"
+
+      - name: Reset to upstream (reset strategy)
+        if: steps.sync_info.outputs.up_to_date == 'false' && inputs.strategy == 'reset'
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          echo "::warning::Resetting to upstream/${BRANCH}. Your custom changes will be lost!"
+          git reset --hard upstream/${BRANCH}
+          echo "Reset successful!"
+
+      - name: Push changes
+        if: steps.sync_info.outputs.up_to_date == 'false'
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          STRATEGY="${{ inputs.strategy || 'merge' }}"
+          
+          if [ "$STRATEGY" == "rebase" ] || [ "$STRATEGY" == "reset" ]; then
+            git push --force-with-lease origin ${BRANCH}
+          else
+            git push origin ${BRANCH}
+          fi
+          
+          echo "Changes pushed to origin/${BRANCH}"
+
+      - name: Create sync summary
+        if: always()
+        run: |
+          BRANCH="${{ steps.sync_info.outputs.branch }}"
+          STRATEGY="${{ inputs.strategy || 'merge' }}"
+          
+          echo "## Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Branch | \`${BRANCH}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Strategy | \`${STRATEGY}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Was behind | ${{ steps.sync_info.outputs.behind }} commits |" >> $GITHUB_STEP_SUMMARY
+          echo "| Was ahead | ${{ steps.sync_info.outputs.ahead }} commits |" >> $GITHUB_STEP_SUMMARY
+          echo "| Up to date | ${{ steps.sync_info.outputs.up_to_date }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.sync_info.outputs.up_to_date }}" == "true" ]; then
+            echo "✅ Already up to date with upstream!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Synced with upstream successfully!" >> $GITHUB_STEP_SUMMARY
+          fi
