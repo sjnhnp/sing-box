@@ -73,26 +73,7 @@ func SetXPCDialer(dialer XPCDialer) {
 	sXPCDialer = dialer
 }
 
-type LogEntry struct {
-	Level   int32
-	Message string
-}
 
-type LogIterator interface {
-	Len() int32
-	HasNext() bool
-	Next() *LogEntry
-}
-
-type XPCDialer interface {
-	DialXPC() (int32, error)
-}
-
-var sXPCDialer XPCDialer
-
-func SetXPCDialer(dialer XPCDialer) {
-	sXPCDialer = dialer
-}
 
 func NewStandaloneCommandClient() *CommandClient {
 	return &CommandClient{standalone: true}
