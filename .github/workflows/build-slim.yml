@@ -4,10 +4,18 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (e.g., 1.13.0-beta.4 or 1.12.15). Do NOT include 'v' prefix. Leave empty for latest pre-release."
+        description: "Specific version (e.g., 1.13.0-beta.4). Leave empty to use 'Mode'."
         required: false
         type: string
-  # Removed: schedule - manual trigger only
+      mode:
+        description: "Build Mode (Ignore if Version set)"
+        required: true
+        default: "beta"
+        type: choice
+        options:
+          - beta
+          - stable
+          - all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,138 +23,143 @@ concurrency:
 
 # ============================================================================
 # SLIM BUILD CONFIGURATION
-# Only includes protocols you use:
-#   ✅ vless, vmess, trojan, shadowsocks, hysteria2, naive
-# Removed protocols:
-#   ❌ tor, ssh, shadowtls, anytls, tuic, hysteria v1, wireguard, tailscale
 # ============================================================================
-
 env:
-  # Slim build tags - removed with_wireguard, with_tailscale, with_dhcp, with_acme, with_ccm, with_ocm
   SLIM_TAGS: "with_gvisor,with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0"
   SLIM_TAGS_NAIVE: "with_gvisor,with_quic,with_utls,with_clash_api,with_naive_outbound,badlinkname,tfogo_checklinkname0"
 
 jobs:
-  get_latest_version:
-    name: Get latest sing-box version
+  strategy_matrix:
+    name: Determine Versions
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get_version.outputs.version }}
-      tag: ${{ steps.get_version.outputs.tag }}
+      matrix: ${{ steps.generate.outputs.matrix }}
     steps:
-      - name: Get latest pre-release version from upstream
-        id: get_version
+      - name: Generate Version Matrix
+        id: generate
         run: |
           set -euo pipefail
           
+          # Initialize lists
+          VERSIONS_JSON="[]"
+          
+          add_version() {
+            local v=$1
+            local t=$2
+            local p=$3
+            # Use jq to append object to array
+            VERSIONS_JSON=$(echo "$VERSIONS_JSON" | jq --arg v "$v" --arg t "$t" --argjson p "$p" \
+              '. + [{"version": $v, "tag": $t, "prerelease": $p}]')
+          }
+
           if [ -n "${{ inputs.version }}" ]; then
-            # Use user-specified version
-            VERSION="${{ inputs.version }}"
-            TAG="v${VERSION}"
-            echo "Using user-specified version: ${VERSION}"
+             # Manual Version
+             VER="${{ inputs.version }}"
+             TAG="v${VER}"
+             # Guess prerelease based on hyphen
+             if [[ "$VER" == *"-"* ]]; then PRE=true; else PRE=false; fi
+             add_version "$VER" "$TAG" "$PRE"
+             echo "Mode: Manual ($VER)"
           else
-            # Get the latest pre-release from SagerNet/sing-box
-            echo "Fetching latest pre-release from SagerNet/sing-box..."
-            RELEASE_INFO=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases" | jq -r '[.[] | select(.prerelease == true)] | .[0]')
-            
-            if [ "$RELEASE_INFO" == "null" ] || [ -z "$RELEASE_INFO" ]; then
-              echo "No pre-release found, falling back to latest release"
-              RELEASE_INFO=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases/latest")
-            fi
-            
-            TAG=$(echo "$RELEASE_INFO" | jq -r '.tag_name')
-            VERSION=$(echo "$TAG" | sed 's/^v//')
-            echo "Latest pre-release: ${TAG}"
+             # Fetch from Upstream
+             echo "Fetching releases from SagerNet/sing-box..."
+             RELEASES_JSON=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases")
+             
+             LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.prerelease == true)] | .[0] | .tag_name')
+             LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.prerelease == false)] | .[0] | .tag_name')
+             
+             MODE="${{ inputs.mode }}"
+             
+             if [[ "$MODE" == "beta" || "$MODE" == "all" ]]; then
+                if [ -n "$LATEST_BETA" ] && [ "$LATEST_BETA" != "null" ]; then
+                  VER=$(echo "$LATEST_BETA" | sed 's/^v//')
+                  add_version "$VER" "$LATEST_BETA" true
+                  echo "Found Beta: $LATEST_BETA"
+                fi
+             fi
+             
+             if [[ "$MODE" == "stable" || "$MODE" == "all" ]]; then
+                if [ -n "$LATEST_STABLE" ] && [ "$LATEST_STABLE" != "null" ]; then
+                  VER=$(echo "$LATEST_STABLE" | sed 's/^v//')
+                  add_version "$VER" "$LATEST_STABLE" false
+                  echo "Found Stable: $LATEST_STABLE"
+                fi
+             fi
           fi
           
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "Will build sing-box version: ${VERSION} (tag: ${TAG})"
+          echo "Generated Matrix:"
+          echo "$VERSIONS_JSON" | jq .
+          
+          # Set output (compress json to one line)
+          echo "matrix=$(echo "$VERSIONS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
 
   # ============================================================================
-  # ANDROID BUILD (arm64-v8a with Naive)
+  # ANDROID BUILD
   # ============================================================================
   build_android:
-    name: Build Android APK (arm64-v8a)
+    name: Android (${{ matrix.config.version }})
     runs-on: ubuntu-latest
-    needs:
-      - get_latest_version
+    needs: strategy_matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.strategy_matrix.outputs.matrix) }}
     steps:
-      - name: Checkout this repo (for custom include files)
+      - name: Checkout custom
         uses: actions/checkout@v4
-        with:
-          path: custom
+        with: { path: custom }
 
-      - name: Checkout upstream sing-box
+      - name: Checkout upstream
         uses: actions/checkout@v4
         with:
           repository: SagerNet/sing-box
-          ref: ${{ needs.get_latest_version.outputs.tag }}
+          ref: ${{ matrix.config.tag }}
           fetch-depth: 0
           submodules: 'recursive'
           path: sing-box
 
-      - name: Apply custom slim protocol modifications
+      - name: Apply slim modifications
         run: |
-          # Copy our customized include files to remove unused protocols
           cp custom/include/registry.go sing-box/include/registry.go
           cp custom/include/quic.go sing-box/include/quic.go
           cp custom/include/quic_stub.go sing-box/include/quic_stub.go
-          echo "Applied custom slim protocol modifications"
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with:
-          go-version: ^1.25.5
+        with: { go-version: ^1.25.5 }
 
       - name: Setup Android NDK
         id: setup-ndk
         uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: r28
-          local-cache: true
+        with: { ndk-version: r28, local-cache: true }
 
       - name: Setup OpenJDK
-        run: |-
-          sudo apt update && sudo apt install -y openjdk-17-jdk-headless
-          /usr/lib/jvm/java-17-openjdk-amd64/bin/java --version
+        run: sudo apt update && sudo apt install -y openjdk-17-jdk-headless
 
       - name: Set tag
         working-directory: sing-box
-        run: |-
-          git tag v${{ needs.get_latest_version.outputs.version }} -f || true
+        run: git tag v${{ matrix.config.version }} -f || true
 
-      - name: Build library (slim with naive)
+      - name: Build library
         working-directory: sing-box
         run: |-
           make lib_install
           export PATH="$PATH:$(go env GOPATH)/bin"
           
-          VERSION="${{ needs.get_latest_version.outputs.version }}"
+          VERSION="${{ matrix.config.version }}"
           TAGS="${{ env.SLIM_TAGS_NAIVE }},with_conntrack"
           LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
           
-          gomobile bind -v \
-            -o libbox.aar \
-            -target android/arm64 \
-            -androidapi 23 \
-            -javapkg=io.nekohasekai \
-            -libname=box \
-            -trimpath \
-            -buildvcs=false \
-            -ldflags "${LDFLAGS}" \
-            -tags "${TAGS}" \
-            ./experimental/libbox
+          gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 23 \
+            -javapkg=io.nekohasekai -libname=box -trimpath -buildvcs=false \
+            -ldflags "${LDFLAGS}" -tags "${TAGS}" ./experimental/libbox
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
-      - name: Checkout dev branch for Android client
+      - name: Checkout Android Client
         working-directory: sing-box
-        run: |-
-          cd clients/android
-          git fetch origin dev
-          git checkout dev
+        run: cd clients/android && git fetch origin dev && git checkout dev
 
       - name: Gradle cache
         uses: actions/cache@v4
@@ -154,10 +167,10 @@ jobs:
           path: ~/.gradle
           key: gradle-android-slim-${{ hashFiles('sing-box/clients/android/**/*.gradle*') }}
 
-      - name: Update version in Android client
+      - name: Update Version Prop
         working-directory: sing-box
-        run: |-
-          VERSION="${{ needs.get_latest_version.outputs.version }}"
+        run: |
+          VERSION="${{ matrix.config.version }}"
           MAJOR=$(echo "$VERSION" | cut -d. -f1)
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH_FULL=$(echo "$VERSION" | cut -d. -f3)
@@ -170,9 +183,8 @@ jobs:
           
           echo "VERSION_CODE=${VERSION_CODE}" > clients/android/version.properties
           echo "VERSION_NAME=${VERSION}" >> clients/android/version.properties
-          cat clients/android/version.properties
 
-      - name: Setup signing keystore
+      - name: Setup Keystore
         working-directory: sing-box
         run: |-
           cd clients/android
@@ -183,7 +195,7 @@ jobs:
           ALIAS_PASS=${{ secrets.KEY_PASSWORD }}
           EOF
 
-      - name: Modify build.gradle.kts for arm64 only
+      - name: Patch Gradle (Arm64 Only)
         working-directory: sing-box
         run: |-
           cd clients/android/app
@@ -202,81 +214,70 @@ jobs:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
-      - name: Prepare artifacts
+      - name: Prepare Artifacts
         run: |-
           mkdir -p dist
           find sing-box/clients/android/app/build/outputs/apk/other/release -name "*.apk" -exec cp {} dist/ \;
           cd dist
-          for apk in *.apk; do
-            if [ -f "$apk" ]; then
-              mv "$apk" "sing-box-${{ needs.get_latest_version.outputs.version }}-android-arm64-slim.apk"
-              break
-            fi
-          done
+          mv *.apk "sing-box-${{ matrix.config.version }}-android-arm64-slim.apk"
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-arm64-slim
-          path: 'dist'
+          # Unique name for each matrix version
+          name: android-arm64-slim-${{ matrix.config.version }}
+          path: dist
 
   # ============================================================================
-  # WINDOWS BUILD (amd64, arm64 with Naive + libcronet.dll)
+  # WINDOWS BUILD
   # ============================================================================
   build_windows:
-    name: Build Windows
+    name: Windows ${{ matrix.arch }} (${{ matrix.config.version }})
     runs-on: windows-latest
-    needs:
-      - get_latest_version
+    needs: strategy_matrix
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - { arch: amd64 }
-          - { arch: arm64 }
+        config: ${{ fromJson(needs.strategy_matrix.outputs.matrix) }}
+        arch: [amd64, arm64]
     steps:
-      - name: Checkout this repo (for custom include files)
+      - name: Checkout custom
         uses: actions/checkout@v4
-        with:
-          path: custom
+        with: { path: custom }
 
-      - name: Checkout upstream sing-box
+      - name: Checkout upstream
         uses: actions/checkout@v4
         with:
           repository: SagerNet/sing-box
-          ref: ${{ needs.get_latest_version.outputs.tag }}
+          ref: ${{ matrix.config.tag }}
           fetch-depth: 0
           path: sing-box
 
-      - name: Apply custom slim protocol modifications
+      - name: Apply slim modifications
         run: |
           Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
           Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
           Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-          Write-Host "Applied custom slim protocol modifications"
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with:
-          go-version: ^1.25.5
+        with: { go-version: ^1.25.5 }
 
       - name: Set tag
         working-directory: sing-box
-        run: |-
-          git tag v${{ needs.get_latest_version.outputs.version }} -f
+        run: git tag v${{ matrix.config.version }} -f
 
-      - name: Build (slim with naive)
+      - name: Build
         working-directory: sing-box
         run: |
           mkdir -p dist
           $env:CGO_ENABLED = "0"
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.arch }}"
-          
-          # Build with slim tags + naive + purego (for Windows without CGO)
           $TAGS = "${{ env.SLIM_TAGS_NAIVE }},with_purego"
           
           go build -v -trimpath -o dist/sing-box.exe -tags "$TAGS" `
-            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ needs.get_latest_version.outputs.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
+            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
             ./cmd/sing-box
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -291,76 +292,68 @@ jobs:
       - name: Archive
         working-directory: sing-box
         run: |
-          $DIR_NAME = "sing-box-${{ needs.get_latest_version.outputs.version }}-windows-${{ matrix.arch }}-slim"
+          $DIR_NAME = "sing-box-${{ matrix.config.version }}-windows-${{ matrix.arch }}-slim"
           mkdir "dist/$DIR_NAME"
           Copy-Item LICENSE "dist/$DIR_NAME"
           Copy-Item "dist/sing-box.exe" "dist/$DIR_NAME"
           Copy-Item "dist/libcronet.dll" "dist/$DIR_NAME"
           Compress-Archive -Path "dist/$DIR_NAME" -DestinationPath "dist/$DIR_NAME.zip"
           Remove-Item -Recurse "dist/$DIR_NAME"
-          Remove-Item "dist/sing-box.exe", "dist/libcronet.dll"
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: windows-${{ matrix.arch }}-slim
-          path: "sing-box/dist"
+          name: windows-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          path: sing-box/dist
 
   # ============================================================================
-  # MACOS BUILD (amd64, arm64 with Naive)
+  # MACOS BUILD
   # ============================================================================
   build_macos:
-    name: Build macOS
+    name: macOS ${{ matrix.arch }} (${{ matrix.config.version }})
     runs-on: macos-latest
-    needs:
-      - get_latest_version
+    needs: strategy_matrix
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - { arch: amd64, name: intel }
-          - { arch: arm64, name: apple-silicon }
+        config: ${{ fromJson(needs.strategy_matrix.outputs.matrix) }}
+        arch: [amd64, arm64]
     steps:
-      - name: Checkout this repo (for custom include files)
+      - name: Checkout custom
         uses: actions/checkout@v4
-        with:
-          path: custom
+        with: { path: custom }
 
-      - name: Checkout upstream sing-box
+      - name: Checkout upstream
         uses: actions/checkout@v4
         with:
           repository: SagerNet/sing-box
-          ref: ${{ needs.get_latest_version.outputs.tag }}
+          ref: ${{ matrix.config.tag }}
           fetch-depth: 0
           path: sing-box
 
-      - name: Apply custom slim protocol modifications
+      - name: Apply slim modifications
         run: |
           cp custom/include/registry.go sing-box/include/registry.go
           cp custom/include/quic.go sing-box/include/quic.go
           cp custom/include/quic_stub.go sing-box/include/quic_stub.go
-          echo "Applied custom slim protocol modifications"
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with:
-          go-version: ^1.25.5
+        with: { go-version: ^1.25.5 }
 
       - name: Set tag
         working-directory: sing-box
-        run: |-
-          git tag v${{ needs.get_latest_version.outputs.version }} -f
+        run: git tag v${{ matrix.config.version }} -f
 
-      - name: Build (slim with naive)
+      - name: Build
         working-directory: sing-box
         run: |
           set -xeuo pipefail
           mkdir -p dist
-          
-          # macOS supports CGO, so we can build with naive directly
           TAGS="${{ env.SLIM_TAGS_NAIVE }}"
           
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ needs.get_latest_version.outputs.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
             ./cmd/sing-box
         env:
           CGO_ENABLED: "1"
@@ -372,7 +365,7 @@ jobs:
         working-directory: sing-box
         run: |
           set -xeuo pipefail
-          DIR_NAME="sing-box-${{ needs.get_latest_version.outputs.version }}-darwin-${{ matrix.arch }}-slim"
+          DIR_NAME="sing-box-${{ matrix.config.version }}-darwin-${{ matrix.arch }}-slim"
           cd dist
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
@@ -380,82 +373,68 @@ jobs:
           tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
           rm -r "${DIR_NAME}" sing-box
 
-      - name: Upload artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: macos-${{ matrix.arch }}-slim
-          path: "sing-box/dist"
+          name: macos-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          path: sing-box/dist
 
   # ============================================================================
-  # CREATE RELEASE
+  # CREATE RELEASES
   # ============================================================================
   release:
-    name: Create Release
+    name: Release ${{ matrix.config.tag }}
     runs-on: ubuntu-latest
-    needs:
-      - get_latest_version
-      - build_android
-      - build_windows
-      - build_macos
+    needs: [strategy_matrix, build_android, build_windows, build_macos]
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.strategy_matrix.outputs.matrix) }}
     steps:
-      - name: Download all artifacts
+      - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: "*-slim-${{ matrix.config.version }}"
+          merge-multiple: true
 
-      - name: Prepare release files
+      - name: Prepare Release Files
         run: |
-          mkdir -p release
-          find artifacts -type f \( -name "*.apk" -o -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} release/ \;
-          ls -la release/
+          mkdir -p release_files
+          # Move files matching current version to release dir
+          find artifacts -type f -name "*${{ matrix.config.version }}*" -exec cp {} release_files/ \;
+          ls -la release_files/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ needs.get_latest_version.outputs.version }}-slim
-          name: sing-box v${{ needs.get_latest_version.outputs.version }} Slim Build
+          tag_name: v${{ matrix.config.version }}-slim
+          name: sing-box v${{ matrix.config.version }} Slim Build
           body: |
             ## sing-box Slim Build - Multi-Platform Release
 
-            **Based on upstream sing-box ${{ needs.get_latest_version.outputs.tag }}** from [SagerNet/sing-box](https://github.com/SagerNet/sing-box/releases/tag/${{ needs.get_latest_version.outputs.tag }})
-
+            **Based on upstream sing-box ${{ matrix.config.tag }}**
+            
             ### 📦 Downloads
-
-            | Platform | Architecture | File |
-            |----------|--------------|------|
-            | Android | arm64-v8a | `sing-box-${{ needs.get_latest_version.outputs.version }}-android-arm64-slim.apk` |
-            | Windows | amd64 | `sing-box-${{ needs.get_latest_version.outputs.version }}-windows-amd64-slim.zip` |
-            | Windows | arm64 | `sing-box-${{ needs.get_latest_version.outputs.version }}-windows-arm64-slim.zip` |
-            | macOS | Intel (amd64) | `sing-box-${{ needs.get_latest_version.outputs.version }}-darwin-amd64-slim.tar.gz` |
-            | macOS | Apple Silicon (arm64) | `sing-box-${{ needs.get_latest_version.outputs.version }}-darwin-arm64-slim.tar.gz` |
+            
+            | Platform | File |
+            |----------|------|
+            | Android (arm64) | `sing-box-${{ matrix.config.version }}-android-arm64-slim.apk` |
+            | Windows (amd64) | `sing-box-${{ matrix.config.version }}-windows-amd64-slim.zip` |
+            | Windows (arm64) | `sing-box-${{ matrix.config.version }}-windows-arm64-slim.zip` |
+            | macOS (Intel) | `sing-box-${{ matrix.config.version }}-darwin-amd64-slim.tar.gz` |
+            | macOS (Silicon) | `sing-box-${{ matrix.config.version }}-darwin-arm64-slim.tar.gz` |
 
             ### ✅ Included Protocols
-            - VLESS (with Reality support)
-            - VMess
-            - Trojan
-            - Shadowsocks
-            - Hysteria2
+            - VLESS (Reality), VMess, Trojan, Shadowsocks, Hysteria2
             - **NaiveProxy** (Windows includes `libcronet.dll`)
-
-            ### ❌ Removed Protocols (to reduce binary size)
-            - Tor, SSH, ShadowTLS, AnyTLS
-            - TUIC, Hysteria v1
-            - WireGuard, Tailscale
-
-            ### 📋 Features
-            - gVisor (TUN stack)
-            - QUIC
-            - uTLS
-            - Clash API
-
-            ### 📝 Notes
-            - **Windows**: `libcronet.dll` is included for NaiveProxy support. Place it in the same directory as `sing-box.exe`.
-            - **macOS**: NaiveProxy works natively without additional files.
-            - **Android**: Min SDK 23 (Android 6.0+), arm64 only.
-
-            This is a slim build optimized for specific use cases. If you need WireGuard, Tailscale, or other removed protocols, use the [official sing-box release](https://github.com/SagerNet/sing-box/releases).
+            
+            ### ❌ Removed
+            - Tor, SSH, ShadowTLS, AnyTLS, TUIC, Hysteria v1, WireGuard, Tailscale
+            
+            (Auto-generated by custom slim-build workflow)
           draft: false
-          prerelease: true
-          files: release/*
+          prerelease: ${{ matrix.config.prerelease }}
+          files: release_files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
