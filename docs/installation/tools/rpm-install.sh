@@ -12,11 +12,11 @@ case "${ARCH_RAW}" in
     *)          echo "Unsupported architecture: ${ARCH_RAW}"; exit 1;;
 esac
 
-VERSION=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest \
+VERSION=$(curl -s https://api.github.com/repos/sjnhnp/sing-box/releases/latest \
     | grep tag_name \
     | cut -d ":" -f2 \
     | sed 's/\"//g;s/\,//g;s/\ //g;s/v//')
 
-curl -Lo sing-box.rpm "https://github.com/SagerNet/sing-box/releases/download/v${VERSION}/sing-box_${VERSION}_linux_${ARCH}.rpm"
+curl -Lo sing-box.rpm "https://github.com/sjnhnp/sing-box/releases/download/v${VERSION}/sing-box_${VERSION}_linux_${ARCH}.rpm"
 sudo rpm -i sing-box.rpm
 rm sing-box.rpm

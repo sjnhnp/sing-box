@@ -61,9 +61,9 @@ fi
 if [ -z "$download_version" ]; then
   if [ "$download_beta" != "true" ]; then
     if [ -n "$GITHUB_TOKEN" ]; then
-      latest_release=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/SagerNet/sing-box/releases/latest)
+      latest_release=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/sjnhnp/sing-box/releases/latest)
     else
-      latest_release=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases/latest)
+      latest_release=$(curl -s https://api.github.com/repos/sjnhnp/sing-box/releases/latest)
     fi
     curl_exit_status=$?
     if [ $curl_exit_status -ne 0 ]; then
@@ -76,9 +76,9 @@ if [ -z "$download_version" ]; then
     download_version=$(echo "$latest_release" | grep tag_name | head -n 1 | awk -F: '{print $2}' | sed 's/[", v]//g')
   else
     if [ -n "$GITHUB_TOKEN" ]; then
-      latest_release=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/SagerNet/sing-box/releases)
+      latest_release=$(curl -s -H "Authorization: token ${GITHUB_TOKEN}" https://api.github.com/repos/sjnhnp/sing-box/releases)
     else
-      latest_release=$(curl -s https://api.github.com/repos/SagerNet/sing-box/releases)
+      latest_release=$(curl -s https://api.github.com/repos/sjnhnp/sing-box/releases)
     fi
     curl_exit_status=$?
     if [ $curl_exit_status -ne 0 ]; then
@@ -93,7 +93,7 @@ if [ -z "$download_version" ]; then
 fi
 
 package_name="sing-box_${download_version}_${os}_${arch}${package_suffix}"
-package_url="https://github.com/SagerNet/sing-box/releases/download/v${download_version}/${package_name}"
+package_url="https://github.com/sjnhnp/sing-box/releases/download/v${download_version}/${package_name}"
 
 echo "Downloading $package_url"
 if [ -n "$GITHUB_TOKEN" ]; then
