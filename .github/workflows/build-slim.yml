@@ -160,10 +160,8 @@ jobs:
       - name: Checkout Android Client
         working-directory: sing-box
         run: |-
-          cd clients/android
-          git remote set-url origin https://github.com/sjnhnp/sing-box-for-android.git
-          git fetch origin dev
-          git checkout dev
+          rm -rf clients/android
+          git clone -b dev https://github.com/sjnhnp/sing-box-for-android.git clients/android
 
       - name: Gradle cache
         uses: actions/cache@v4
