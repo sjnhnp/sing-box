@@ -240,6 +240,7 @@ jobs:
           # Unique name for each matrix version
           name: android-arm64-slim-${{ matrix.config.version }}
           path: dist
+          retention-days: 1
 
   # ============================================================================
   # WINDOWS BUILD
@@ -318,6 +319,7 @@ jobs:
         with:
           name: windows-${{ matrix.arch }}-slim-${{ matrix.config.version }}
           path: sing-box/dist
+          retention-days: 1
 
   # ============================================================================
   # MACOS BUILD
@@ -391,6 +393,7 @@ jobs:
         with:
           name: macos-${{ matrix.arch }}-slim-${{ matrix.config.version }}
           path: sing-box/dist
+          retention-days: 1
 
   # ============================================================================
   # CREATE RELEASES
