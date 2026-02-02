@@ -416,6 +416,8 @@ jobs:
           mkdir -p release_files
           # Move files matching current version to release dir
           find artifacts -type f -name "*${{ matrix.config.version }}*" -exec cp {} release_files/ \;
+          # Also copy the metadata json
+          find artifacts -type f -name "SFA-version-metadata.json" -exec cp {} release_files/ \;
           ls -la release_files/
 
       - name: Create Release
