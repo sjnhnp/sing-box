@@ -220,6 +220,17 @@ jobs:
         run: |-
           mkdir -p dist
           find sing-box/clients/android/app/build/outputs/apk/other/release -name "*.apk" -exec cp {} dist/ \;
+          
+          # Generate version metadata for updater
+          VERSION_CODE=$(grep VERSION_CODE sing-box/clients/android/version.properties | cut -d= -f2)
+          VERSION_NAME=$(grep VERSION_NAME sing-box/clients/android/version.properties | cut -d= -f2)
+          cat > dist/SFA-version-metadata.json << EOF
+          {
+            "version_code": ${VERSION_CODE},
+            "version_name": "${VERSION_NAME}"
+          }
+          EOF
+          
           cd dist
           mv *.apk "sing-box-${{ matrix.config.version }}-android-arm64-slim.apk"
 
