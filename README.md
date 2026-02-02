@@ -1,7 +1,4 @@
 
-![alt text](image.png)
----
-
-## Documentation
+### Documentation
 
 https://sing-box.sagernet.org

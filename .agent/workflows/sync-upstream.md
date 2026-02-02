@@ -1,151 +1,143 @@
 ---
-description: 同步上游 sing-box 代码，保留自定义精简协议配置
+description: Sync with upstream sing-box while intelligently preserving custom slim-down modifications.
 ---
 
-# Sync Upstream Workflow
+# Smart Sync Upstream Workflow
 
-此 workflow 用于同步上游 SagerNet/sing-box 的最新代码，同时保留你的自定义修改。
-
-## 自定义文件列表
-
-以下文件包含你的自定义修改，同步时必须保留：
-
-**协议精简文件：**
-- `include/registry.go` - 移除不需要的协议注册
-- `include/quic.go` - 只保留 hysteria2
-- `include/quic_stub.go` - 对应的 stub 文件
-
-**自定义工作流：**
-- `.github/workflows/build-slim.yml` - 多平台精简构建
-- `.github/workflows/sync-upstream-preserve.yml` - GitHub Actions 同步工作流
-
-**其他自定义文件：**
-- `README.md` - 自定义项目说明
+此 workflow 用于同步上游 SagerNet/sing-box 的最新代码，采用**智能合并策略**：
+1. **保留上游变更**：默认接受上游的所有新代码（包括新协议、Bug修复）。
+2. **智能精简**：使用脚本自动再次移除（注释掉）你不需要的协议。
+3. **保留配置**：CI 配置文件和文档直接保留你的版本。
 
 ## 执行步骤
 
-### 1. 备份自定义文件
+### 1. 备份关键文件 (作为安全网)
 
 // turbo
 ```bash
-mkdir -p /tmp/sing-box-backup
-mkdir -p /tmp/sing-box-backup/.github/workflows
-cp include/registry.go /tmp/sing-box-backup/
-cp include/quic.go /tmp/sing-box-backup/
-cp include/quic_stub.go /tmp/sing-box-backup/
-cp .github/workflows/build-slim.yml /tmp/sing-box-backup/.github/workflows/
-cp .github/workflows/sync-upstream-preserve.yml /tmp/sing-box-backup/.github/workflows/
-cp README.md /tmp/sing-box-backup/
-echo "✅ 自定义文件已备份到 /tmp/sing-box-backup/"
+$backupDir = Join-Path $env:TEMP "sing-box-backup"
+if (Test-Path $backupDir) { Remove-Item -Recurse -Force $backupDir }
+New-Item -ItemType Directory -Force -Path "$backupDir\.github\workflows" | Out-Null
+Copy-Item ".github\workflows\build-slim.yml" -Destination "$backupDir\.github\workflows\build-slim.yml"
+Copy-Item ".github\workflows\sync-upstream-preserve.yml" -Destination "$backupDir\.github\workflows\sync-upstream-preserve.yml"
+Copy-Item "README.md" -Destination "$backupDir\README.md"
+# 备份代码文件以防万一
+Copy-Item "include\registry.go" -Destination "$backupDir\registry.go"
+Copy-Item "include\quic.go" -Destination "$backupDir\quic.go"
+Copy-Item "include\quic_stub.go" -Destination "$backupDir\quic_stub.go"
+
+Write-Host "✅ Backup created at $backupDir"
 ```
 
-### 2. 添加上游远程仓库
+### 2. 同步上游代码
+
+使用 `-X theirs` 策略合并，这意味着如果发生冲突，我们将**优先使用上游的最新代码**。这会自动把我们在 `registry.go` 等文件中注释掉的代码恢复（取消注释）。别担心，下一步我们会再次把它们“修剪”掉。
 
 // turbo
 ```bash
-git remote add upstream https://github.com/SagerNet/sing-box.git 2>/dev/null || echo "upstream 已存在"
+git remote add upstream https://github.com/SagerNet/sing-box.git 2>$null
 git fetch upstream --tags
+git merge upstream/dev-next -X theirs -m "Merge upstream dev-next (Smart Sync)"
 ```
 
-### 3. 查看同步状态
+### 3. 恢复 CI 配置和文档
+
+对于 `.github` 目录和 `README.md`，我们完全不关心上游的变化，直接强制恢复我们的版本。
 
 // turbo
 ```bash
-echo "=== 当前分支状态 ==="
-git branch -v
+$backupDir = Join-Path $env:TEMP "sing-box-backup"
+Copy-Item "$backupDir\.github\workflows\build-slim.yml" -Destination ".github\workflows\build-slim.yml" -Force
+Copy-Item "$backupDir\.github\workflows\sync-upstream-preserve.yml" -Destination ".github\workflows\sync-upstream-preserve.yml" -Force
+Copy-Item "$backupDir\README.md" -Destination "README.md" -Force
+# quic_stub.go 比较特殊，它的修改是为了配合精简，上游通常不会改这个文件的核心逻辑，直接恢复最安全
+Copy-Item "$backupDir\quic_stub.go" -Destination "include\quic_stub.go" -Force
+```
+
+### 4. 执行智能精简脚本
+
+此脚本会扫描代码文件，将不需要的协议再次注释掉。这样既保留了上游的新功能，又维持了你的精简配置。
+
+// turbo
+```powershell
+function Slim-Down-File {
+    param ($Path, $Imports, $Registers)
+    
+    Write-Host "Processing $Path..."
+    $content = Get-Content $Path -Raw
+
+    # 1. Comment out Imports
+    foreach ($imp in $Imports) {
+        # 匹配 import 行，但忽略已经被注释的行
+        # Regex: 必须匹配双引号内的包名，且行首不能已经有 // Removed
+        $pattern = '(?m)^(?!\s*// Removed:)\s*"' + [regex]::Escape($imp) + '"'
+        $replacement = '// Removed: ' + $imp + ' - not used'
+        
+        # 使用 RegexReplace 可能会破坏格式，这里我们用简单的行处理或者精细正则
+        # 为了稳健，我们用正则替换整行
+        $content = $content -replace $pattern, ('	' + $replacement)
+    }
+
+    # 2. Comment out Registers
+    foreach ($reg in $Registers) {
+        # Regex: 匹配 "package.Register...(registry)"
+        $pattern = '(?m)^(?!\s*// Removed:)\s*' + [regex]::Escape($reg) + '\('
+        $replacement = '// Removed: ' + $reg + '('
+        $content = $content -replace $pattern, ('	' + $replacement)
+    }
+
+    Set-Content -Path $Path -Value $content -NoNewline
+}
+
+# --- 处理 include/registry.go ---
+$registryImports = @(
+    "github.com/sagernet/sing-box/protocol/anytls",
+    "github.com/sagernet/sing-box/protocol/shadowtls",
+    "github.com/sagernet/sing-box/protocol/ssh",
+    "github.com/sagernet/sing-box/protocol/tor"
+)
+$registryRegs = @(
+    "shadowtls.RegisterInbound",
+    "anytls.RegisterInbound",
+    "tor.RegisterOutbound",
+    "ssh.RegisterOutbound",
+    "shadowtls.RegisterOutbound",
+    "anytls.RegisterOutbound"
+)
+Slim-Down-File -Path "include/registry.go" -Imports $registryImports -Registers $registryRegs
+
+# --- 处理 include/quic.go ---
+$quicImports = @(
+    "github.com/sagernet/sing-box/protocol/hysteria", # v1
+    "github.com/sagernet/sing-box/protocol/tuic"
+)
+$quicRegs = @(
+    "hysteria.RegisterInbound",
+    "tuic.RegisterInbound",
+    "hysteria.RegisterOutbound",
+    "tuic.RegisterOutbound"
+)
+Slim-Down-File -Path "include/quic.go" -Imports $quicImports -Registers $quicRegs
+
+Write-Host "✅ Smart slim-down complete."
+```
+
+### 5. 检查差异并提交
+
+// turbo
+```bash
+echo "=== 自动处理后的差异 ==="
+git diff
 echo ""
-echo "=== 与上游的差异 ==="
-BEHIND=$(git rev-list --count HEAD..upstream/dev-next)
-AHEAD=$(git rev-list --count upstream/dev-next..HEAD)
-echo "落后上游: ${BEHIND} 个提交"
-echo "领先上游: ${AHEAD} 个提交 (你的自定义)"
-echo ""
-echo "=== 上游最新提交 (前10个) ==="
-git log --oneline upstream/dev-next -10
+echo "即将提交..."
 ```
 
-### 4. 检查自定义文件是否有上游更新
-
-// turbo
-```bash
-echo "=== 检查自定义文件的上游变更 ==="
-for file in include/registry.go include/quic.go include/quic_stub.go; do
-  if ! git diff --quiet HEAD..upstream/dev-next -- "$file" 2>/dev/null; then
-    echo "⚠️  $file 在上游有变更，需要注意"
-    echo "    上游变更摘要:"
-    git diff --stat HEAD..upstream/dev-next -- "$file"
-  else
-    echo "✅ $file 上游无变更"
-  fi
-done
-```
-
-### 5. 合并上游代码
-
-使用 `theirs` 策略合并，优先采用上游版本解决冲突：
-
-```bash
-git merge upstream/dev-next -X theirs -m "Merge upstream dev-next"
-```
-
-### 6. 恢复自定义文件
-
-// turbo
-```bash
-cp /tmp/sing-box-backup/registry.go include/registry.go
-cp /tmp/sing-box-backup/quic.go include/quic.go
-cp /tmp/sing-box-backup/quic_stub.go include/quic_stub.go
-cp /tmp/sing-box-backup/.github/workflows/build-slim.yml .github/workflows/build-slim.yml
-cp /tmp/sing-box-backup/.github/workflows/sync-upstream-preserve.yml .github/workflows/sync-upstream-preserve.yml
-cp /tmp/sing-box-backup/README.md README.md
-echo "✅ 自定义文件已恢复"
-```
-
-### 7. 检查是否需要更新自定义文件
-
-如果上游对 `include/registry.go` 等文件有重要更新（如新增必要的 import），需要手动合并：
-
-```bash
-# 查看上游的 registry.go 有哪些变化
-git diff upstream/dev-next -- include/registry.go
-
-# 如果有需要的新 import 或代码，手动编辑 include/registry.go 添加
-```
-
-### 8. 提交恢复的自定义文件
+### 6. 提交更改
 
 ```bash
 git add include/registry.go include/quic.go include/quic_stub.go
 git add .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml
 git add README.md
-git commit -m "Restore custom modifications after upstream sync"
-```
-
-### 9. 推送到远程仓库
-
-```bash
+git commit -m "Merge upstream & Apply smart slim-down"
 git push origin dev-next
-```
-
-## 如果出现冲突
-
-如果合并过程中出现无法自动解决的冲突：
-
-1. 查看冲突文件：`git status`
-2. 对于非自定义文件，采用上游版本：`git checkout --theirs <file>`
-3. 对于自定义文件，使用备份版本恢复
-4. 标记冲突已解决：`git add <file>`
-5. 完成合并：`git commit`
-
-## 验证同步结果
-
-// turbo
-```bash
-echo "=== 同步后状态 ==="
-git log --oneline -5
-echo ""
-echo "=== 验证自定义文件 ==="
-head -5 include/registry.go
-echo "..."
-grep -c "Removed:" include/registry.go && echo "✅ 自定义注释存在"
 ```
