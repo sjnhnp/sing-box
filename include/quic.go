@@ -1,4 +1,4 @@
-//go:build with_quic
+﻿//go:build with_quic
 
 package include
 
