@@ -178,7 +178,7 @@ jobs:
           PATCH_FULL=$(echo "$VERSION" | cut -d. -f3)
           PATCH=$(echo "$PATCH_FULL" | cut -d- -f1)
           PRERELEASE_NUM=0
-          if echo "$VERSION" | grep -q "alpha\|beta"; then
+          if echo "$VERSION" | grep -q "alpha\|beta\|rc"; then
             PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
           fi
           VERSION_CODE=$((MAJOR * 10000000 + MINOR * 100000 + PATCH * 1000 + PRERELEASE_NUM))
