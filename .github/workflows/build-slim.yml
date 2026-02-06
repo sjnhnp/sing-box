@@ -106,7 +106,7 @@ jobs:
           echo "Generated Version Matrix:"
           echo "$VERSIONS_JSON" | jq .
           
-          # Generate platform-specific matrices (empty array if platform not selected)
+          # Generate platform-specific matrices
           PLATFORM="${{ inputs.platform }}"
           
           # Android matrix
@@ -116,45 +116,40 @@ jobs:
             ANDROID_MATRIX="[]"
           fi
           
-          # Windows matrix (with arch)
+          # Desktop matrix
+          DESKTOP_MATRIX="[]"
+          
+          # Windows
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "windows" ]]; then
-            WINDOWS_MATRIX=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {config: $v, arch: $arch}]')
-          else
-            WINDOWS_MATRIX="[]"
+            DESKTOP_MATRIX=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {platform: "Windows", arch: $arch, runner: "windows-latest", os: "windows", config: $v}]')
           fi
           
-          # macOS matrix (with arch)
+          # macOS
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "macos" ]]; then
-            MACOS_MATRIX=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {config: $v, arch: $arch}]')
-          else
-            MACOS_MATRIX="[]"
+            MACOS_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {platform: "macOS", arch: $arch, runner: "macos-latest", os: "darwin", config: $v}]')
+            DESKTOP_MATRIX=$(echo "$DESKTOP_MATRIX" | jq -c --argjson p "$MACOS_PART" '. + $p')
           fi
           
-          # Linux matrix (with arch)
+          # Linux
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "linux" ]]; then
-            LINUX_MATRIX=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {config: $v, arch: $arch}]')
-          else
-            LINUX_MATRIX="[]"
+            LINUX_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {platform: "Linux", arch: $arch, runner: "ubuntu-latest", os: "linux", config: $v}]')
+            DESKTOP_MATRIX=$(echo "$DESKTOP_MATRIX" | jq -c --argjson p "$LINUX_PART" '. + $p')
           fi
           
           # Check if any builds will run
           HAS_BUILDS="false"
-          if [[ "$ANDROID_MATRIX" != "[]" || "$WINDOWS_MATRIX" != "[]" || "$MACOS_MATRIX" != "[]" || "$LINUX_MATRIX" != "[]" ]]; then
+          if [[ "$ANDROID_MATRIX" != "[]" || "$DESKTOP_MATRIX" != "[]" ]]; then
             HAS_BUILDS="true"
           fi
           
           echo "Platform: $PLATFORM"
           echo "Android builds: $(echo "$ANDROID_MATRIX" | jq length)"
-          echo "Windows builds: $(echo "$WINDOWS_MATRIX" | jq length)"
-          echo "macOS builds: $(echo "$MACOS_MATRIX" | jq length)"
-          echo "Linux builds: $(echo "$LINUX_MATRIX" | jq length)"
+          echo "Desktop builds: $(echo "$DESKTOP_MATRIX" | jq length)"
           
           # Set outputs
           echo "matrix=$(echo "$VERSIONS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
           echo "android_matrix=$(echo "$ANDROID_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
-          echo "windows_matrix=$WINDOWS_MATRIX" >> "$GITHUB_OUTPUT"
-          echo "macos_matrix=$MACOS_MATRIX" >> "$GITHUB_OUTPUT"
-          echo "linux_matrix=$LINUX_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "desktop_matrix=$(echo "$DESKTOP_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
           echo "has_builds=$HAS_BUILDS" >> "$GITHUB_OUTPUT"
 
   # ============================================================================
@@ -216,7 +211,7 @@ jobs:
           LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
           
           gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 23 \
-            -javapkg=io.nekohasekai -libname=box -trimpath -buildvcs=false \
+            -javapkg=io.nekohasekai -libname=libbox -trimpath -buildvcs=false \
             -ldflags "${LDFLAGS}" -tags "${TAGS}" ./experimental/libbox
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
@@ -307,18 +302,15 @@ jobs:
           path: dist
           retention-days: 1
 
-  # ============================================================================
-  # WINDOWS BUILD
-  # ============================================================================
-  build_windows:
-    name: Windows ${{ matrix.arch }} (${{ matrix.config.version }})
-    runs-on: windows-latest
+  build_desktop:
+    name: ${{ matrix.platform }} ${{ matrix.arch }} (${{ matrix.config.version }})
+    runs-on: ${{ matrix.runner }}
     needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.windows_matrix != '[]' }}
+    if: ${{ needs.strategy_matrix.outputs.desktop_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.strategy_matrix.outputs.windows_matrix) }}
+        include: ${{ fromJson(needs.strategy_matrix.outputs.desktop_matrix) }}
     steps:
       - name: Checkout custom
         uses: actions/checkout@v4
@@ -332,11 +324,19 @@ jobs:
           fetch-depth: 0
           path: sing-box
 
-      - name: Apply slim modifications
+      - name: Apply slim modifications (Windows)
+        if: matrix.os == 'windows'
         run: |
           Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
           Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
           Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+
+      - name: Apply slim modifications (Unix)
+        if: matrix.os != 'windows'
+        run: |
+          cp custom/include/registry.go sing-box/include/registry.go
+          cp custom/include/quic.go sing-box/include/quic.go
+          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -344,9 +344,11 @@ jobs:
 
       - name: Set tag
         working-directory: sing-box
-        run: git tag v${{ matrix.config.version }} -f
+        shell: bash
+        run: git tag v${{ matrix.config.version }} -f || true
 
-      - name: Build
+      - name: Build (Windows)
+        if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
           mkdir -p dist
@@ -354,21 +356,52 @@ jobs:
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.arch }}"
           $TAGS = "${{ env.SLIM_TAGS_NAIVE }},with_purego"
-          
           go build -v -trimpath -o dist/sing-box.exe -tags "$TAGS" `
             -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
             ./cmd/sing-box
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract libcronet.dll
+      - name: Build (macOS)
+        if: matrix.os == 'darwin'
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          mkdir -p dist
+          TAGS="${{ env.SLIM_TAGS_NAIVE }}"
+          CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} \
+          go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            ./cmd/sing-box
+
+      - name: Build (Linux)
+        if: matrix.os == 'linux'
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          mkdir -p dist
+          TAGS="${{ env.SLIM_TAGS_NAIVE }},with_purego"
+          CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} \
+          go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            ./cmd/sing-box
+
+      - name: Extract libcronet (Windows)
+        if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
           $CRONET_GO_VERSION = Get-Content .github/CRONET_GO_VERSION
           $env:CGO_ENABLED = "0"
           go run -v "github.com/sagernet/cronet-go/cmd/build-naive@$CRONET_GO_VERSION" extract-lib --target windows/${{ matrix.arch }} -o dist
 
-      - name: Archive
+      - name: Extract libcronet (Linux)
+        if: matrix.os == 'linux'
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
+          CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target linux/${{ matrix.arch }} -o dist
+
+      - name: Archive (Windows)
+        if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
           $DIR_NAME = "sing-box-${{ matrix.config.version }}-windows-${{ matrix.arch }}-slim"
@@ -379,69 +412,8 @@ jobs:
           Compress-Archive -Path "dist/$DIR_NAME" -DestinationPath "dist/$DIR_NAME.zip"
           Remove-Item -Recurse "dist/$DIR_NAME"
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-${{ matrix.arch }}-slim-${{ matrix.config.version }}
-          path: sing-box/dist
-          retention-days: 1
-
-  # ============================================================================
-  # MACOS BUILD
-  # ============================================================================
-  build_macos:
-    name: macOS ${{ matrix.arch }} (${{ matrix.config.version }})
-    runs-on: macos-latest
-    needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.macos_matrix != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.strategy_matrix.outputs.macos_matrix) }}
-    steps:
-      - name: Checkout custom
-        uses: actions/checkout@v4
-        with: { path: custom }
-
-      - name: Checkout upstream
-        uses: actions/checkout@v4
-        with:
-          repository: SagerNet/sing-box
-          ref: ${{ matrix.config.tag }}
-          fetch-depth: 0
-          path: sing-box
-
-      - name: Apply slim modifications
-        run: |
-          cp custom/include/registry.go sing-box/include/registry.go
-          cp custom/include/quic.go sing-box/include/quic.go
-          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with: { go-version: ^1.25.5 }
-
-      - name: Set tag
-        working-directory: sing-box
-        run: git tag v${{ matrix.config.version }} -f
-
-      - name: Build
-        working-directory: sing-box
-        run: |
-          set -xeuo pipefail
-          mkdir -p dist
-          TAGS="${{ env.SLIM_TAGS_NAIVE }}"
-          
-          go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
-            ./cmd/sing-box
-        env:
-          CGO_ENABLED: "1"
-          GOOS: darwin
-          GOARCH: ${{ matrix.arch }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Archive
+      - name: Archive (macOS)
+        if: matrix.os == 'darwin'
         working-directory: sing-box
         run: |
           set -xeuo pipefail
@@ -451,79 +423,9 @@ jobs:
           cp ../LICENSE "${DIR_NAME}"
           cp sing-box "${DIR_NAME}"
           tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
-          rm -r "${DIR_NAME}" sing-box
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-${{ matrix.arch }}-slim-${{ matrix.config.version }}
-          path: sing-box/dist
-          retention-days: 1
-
-  # ============================================================================
-  # LINUX BUILD
-  # ============================================================================
-  build_linux:
-    name: Linux ${{ matrix.arch }} (${{ matrix.config.version }})
-    runs-on: ubuntu-latest
-    needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.linux_matrix != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.strategy_matrix.outputs.linux_matrix) }}
-    steps:
-      - name: Checkout custom
-        uses: actions/checkout@v4
-        with: { path: custom }
-
-      - name: Checkout upstream
-        uses: actions/checkout@v4
-        with:
-          repository: SagerNet/sing-box
-          ref: ${{ matrix.config.tag }}
-          fetch-depth: 0
-          path: sing-box
-
-      - name: Apply slim modifications
-        run: |
-          cp custom/include/registry.go sing-box/include/registry.go
-          cp custom/include/quic.go sing-box/include/quic.go
-          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with: { go-version: ^1.25.5 }
-
-      - name: Set tag
-        working-directory: sing-box
-        run: git tag v${{ matrix.config.version }} -f
-
-      - name: Build
-        working-directory: sing-box
-        run: |
-          set -xeuo pipefail
-          mkdir -p dist
-          # Use with_purego for NaiveProxy support on Linux
-          TAGS="${{ env.SLIM_TAGS_NAIVE }},with_purego"
-          
-          go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
-            ./cmd/sing-box
-        env:
-          CGO_ENABLED: "0"
-          GOOS: linux
-          GOARCH: ${{ matrix.arch }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract libcronet.so
-        working-directory: sing-box
-        run: |
-          set -xeuo pipefail
-          CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
-          CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target linux/${{ matrix.arch }} -o dist
-
-      - name: Archive
+      - name: Archive (Linux)
+        if: matrix.os == 'linux'
         working-directory: sing-box
         run: |
           set -xeuo pipefail
@@ -532,20 +434,23 @@ jobs:
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
           cp sing-box "${DIR_NAME}"
-          # Include libcronet.so for NaiveProxy
-          if [ -f libcronet.so ]; then
-            cp libcronet.so "${DIR_NAME}"
-          fi
+          [ -f libcronet.so ] && cp libcronet.so "${DIR_NAME}" || true
           tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
-          rm -r "${DIR_NAME}" sing-box
-          [ -f libcronet.so ] && rm libcronet.so || true
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-${{ matrix.arch }}-slim-${{ matrix.config.version }}
-          path: sing-box/dist
-          retention-days: 1
+          name: ${{ matrix.os }}-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          path: sing-box/dist/*.zip
+          if-no-files-found: ignore
+
+      - name: Upload Artifact (Unix)
+        if: matrix.os != 'windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          path: sing-box/dist/*.tar.gz
+          if-no-files-found: ignore
 
   # ============================================================================
   # CREATE RELEASES
@@ -553,7 +458,7 @@ jobs:
   release:
     name: Release ${{ matrix.config.tag }}
     runs-on: ubuntu-latest
-    needs: [strategy_matrix, build_android, build_windows, build_macos, build_linux]
+    needs: [strategy_matrix, build_android, build_desktop]
     if: always() && needs.strategy_matrix.result == 'success'
     strategy:
       fail-fast: false
