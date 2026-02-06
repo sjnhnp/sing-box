@@ -445,7 +445,7 @@ jobs:
 
             ### ✅ Included Protocols
             - VLESS (Reality), VMess, Trojan, Shadowsocks, Hysteria2
-            - **NaiveProxy** (Windows includes `libcronet.dll`)
+            - **NaiveProxy** (Windows includes `libcronet.dll`; Android also includes NaiveProxy)
             
             ### ❌ Removed
             - Tor, SSH, ShadowTLS, AnyTLS, TUIC, Hysteria v1, WireGuard, Tailscale
