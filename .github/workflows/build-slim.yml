@@ -16,6 +16,17 @@ on:
           - beta
           - stable
           - all
+      platform:
+        description: "Target Platform"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - android
+          - windows
+          - macos
+          - linux
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -100,6 +111,7 @@ jobs:
     name: Android (${{ matrix.config.version }})
     runs-on: ubuntu-latest
     needs: strategy_matrix
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'android' }}
     strategy:
       fail-fast: false
       matrix:
@@ -249,6 +261,7 @@ jobs:
     name: Windows ${{ matrix.arch }} (${{ matrix.config.version }})
     runs-on: windows-latest
     needs: strategy_matrix
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'windows' }}
     strategy:
       fail-fast: false
       matrix:
@@ -328,6 +341,7 @@ jobs:
     name: macOS ${{ matrix.arch }} (${{ matrix.config.version }})
     runs-on: macos-latest
     needs: strategy_matrix
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'macos' }}
     strategy:
       fail-fast: false
       matrix:
@@ -396,12 +410,88 @@ jobs:
           retention-days: 1
 
   # ============================================================================
+  # LINUX BUILD
+  # ============================================================================
+  build_linux:
+    name: Linux ${{ matrix.arch }} (${{ matrix.config.version }})
+    runs-on: ubuntu-latest
+    needs: strategy_matrix
+    if: ${{ inputs.platform == 'all' || inputs.platform == 'linux' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config: ${{ fromJson(needs.strategy_matrix.outputs.matrix) }}
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout custom
+        uses: actions/checkout@v4
+        with: { path: custom }
+
+      - name: Checkout upstream
+        uses: actions/checkout@v4
+        with:
+          repository: SagerNet/sing-box
+          ref: ${{ matrix.config.tag }}
+          fetch-depth: 0
+          path: sing-box
+
+      - name: Apply slim modifications
+        run: |
+          cp custom/include/registry.go sing-box/include/registry.go
+          cp custom/include/quic.go sing-box/include/quic.go
+          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with: { go-version: ^1.25.5 }
+
+      - name: Set tag
+        working-directory: sing-box
+        run: git tag v${{ matrix.config.version }} -f
+
+      - name: Build
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          mkdir -p dist
+          TAGS="${{ env.SLIM_TAGS_NAIVE }}"
+          
+          go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            ./cmd/sing-box
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Archive
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          DIR_NAME="sing-box-${{ matrix.config.version }}-linux-${{ matrix.arch }}-slim"
+          cd dist
+          mkdir -p "${DIR_NAME}"
+          cp ../LICENSE "${DIR_NAME}"
+          cp sing-box "${DIR_NAME}"
+          tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
+          rm -r "${DIR_NAME}" sing-box
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          path: sing-box/dist
+          retention-days: 1
+
+  # ============================================================================
   # CREATE RELEASES
   # ============================================================================
   release:
     name: Release ${{ matrix.config.tag }}
     runs-on: ubuntu-latest
-    needs: [strategy_matrix, build_android, build_windows, build_macos]
+    needs: [strategy_matrix, build_android, build_windows, build_macos, build_linux]
+    if: always() && needs.strategy_matrix.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -418,9 +508,9 @@ jobs:
         run: |
           mkdir -p release_files
           # Move files matching current version to release dir
-          find artifacts -type f -name "*${{ matrix.config.version }}*" -exec cp {} release_files/ \;
+          find artifacts -type f -name "*${{ matrix.config.version }}*" -exec cp {} release_files/ \; 2>/dev/null || true
           # Also copy the metadata json
-          find artifacts -type f -name "SFA-version-metadata.json" -exec cp {} release_files/ \;
+          find artifacts -type f -name "SFA-version-metadata.json" -exec cp {} release_files/ \; 2>/dev/null || true
           ls -la release_files/
 
       - name: Create Release
@@ -442,6 +532,8 @@ jobs:
             | Windows (arm64) | `sing-box-${{ matrix.config.version }}-windows-arm64-slim.zip` |
             | macOS (Intel) | `sing-box-${{ matrix.config.version }}-darwin-amd64-slim.tar.gz` |
             | macOS (Silicon) | `sing-box-${{ matrix.config.version }}-darwin-arm64-slim.tar.gz` |
+            | Linux (amd64) | `sing-box-${{ matrix.config.version }}-linux-amd64-slim.tar.gz` |
+            | Linux (arm64) | `sing-box-${{ matrix.config.version }}-linux-arm64-slim.tar.gz` |
 
             ### ✅ Included Protocols
             - VLESS (Reality), VMess, Trojan, Shadowsocks, Hysteria2
@@ -456,3 +548,4 @@ jobs:
           files: release_files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
