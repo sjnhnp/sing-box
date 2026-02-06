@@ -454,7 +454,8 @@ jobs:
         run: |
           set -xeuo pipefail
           mkdir -p dist
-          TAGS="${{ env.SLIM_TAGS_NAIVE }}"
+          # Use with_purego for NaiveProxy support on Linux
+          TAGS="${{ env.SLIM_TAGS_NAIVE }},with_purego"
           
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
             -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
@@ -465,6 +466,13 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract libcronet.so
+        working-directory: sing-box
+        run: |
+          set -xeuo pipefail
+          CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
+          CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target linux/${{ matrix.arch }} -o dist
+
       - name: Archive
         working-directory: sing-box
         run: |
@@ -474,8 +482,13 @@ jobs:
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
           cp sing-box "${DIR_NAME}"
+          # Include libcronet.so for NaiveProxy
+          if [ -f libcronet.so ]; then
+            cp libcronet.so "${DIR_NAME}"
+          fi
           tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
           rm -r "${DIR_NAME}" sing-box
+          [ -f libcronet.so ] && rm libcronet.so || true
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -537,7 +550,11 @@ jobs:
 
             ### ✅ Included Protocols
             - VLESS (Reality), VMess, Trojan, Shadowsocks, Hysteria2
-            - **NaiveProxy** (Windows includes `libcronet.dll`; Android also includes NaiveProxy)
+            - **NaiveProxy** support:
+              - Windows: includes `libcronet.dll`
+              - Linux: includes `libcronet.so` (place in same directory as binary)
+              - macOS: CGO-built, no external library needed
+              - Android: included
             
             ### ❌ Removed
             - Tor, SSH, ShadowTLS, AnyTLS, TUIC, Hysteria v1, WireGuard, Tailscale
