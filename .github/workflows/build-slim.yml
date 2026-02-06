@@ -46,9 +46,7 @@ jobs:
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
       android_matrix: ${{ steps.generate.outputs.android_matrix }}
-      windows_matrix: ${{ steps.generate.outputs.windows_matrix }}
-      macos_matrix: ${{ steps.generate.outputs.macos_matrix }}
-      linux_matrix: ${{ steps.generate.outputs.linux_matrix }}
+      desktop_matrix: ${{ steps.generate.outputs.desktop_matrix }}
       has_builds: ${{ steps.generate.outputs.has_builds }}
     steps:
       - name: Generate Version Matrix
