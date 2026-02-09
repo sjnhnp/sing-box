@@ -342,10 +342,9 @@ jobs:
   # ANDROID BUILD
   # ============================================================================
   build_android:
-    name: Android (${{ matrix.version || 'Build' }})
+    name: Android (${{ matrix.version }})
     runs-on: ubuntu-latest
     needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.android_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -447,7 +446,6 @@ jobs:
             -javapkg=io.nekohasekai -libname=libbox -trimpath -buildvcs=false \
             -ldflags "${LDFLAGS}" -tags "${TAGS}" ./experimental/libbox
         env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Checkout Android Client
@@ -506,7 +504,6 @@ jobs:
           cd clients/android
           ./gradlew :app:assembleOtherRelease --no-daemon
         env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Prepare Artifacts
@@ -537,10 +534,9 @@ jobs:
           retention-days: 1
 
   build_desktop:
-    name: ${{ matrix.platform && format('{0} {1} ({2})', matrix.platform, matrix.arch, matrix.config.version) || 'Desktop Build' }}
+    name: ${{ matrix.platform }} ${{ matrix.arch }} (${{ matrix.config.version }})
     runs-on: ${{ matrix.runner }}
     needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.desktop_matrix != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -755,7 +751,7 @@ jobs:
   # CREATE RELEASES
   # ============================================================================
   release:
-    name: Release ${{ matrix.config.tag || 'Build' }}
+    name: Release ${{ matrix.config.tag }}
     runs-on: ubuntu-latest
     needs: [strategy_matrix, build_android, build_desktop]
     if: always() && needs.strategy_matrix.result == 'success'
