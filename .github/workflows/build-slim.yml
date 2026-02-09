@@ -27,6 +27,73 @@ on:
           - windows
           - macos
           - linux
+      # ====== Protocol Selection ======
+      protocol_mode:
+        description: "Protocol Mode"
+        required: true
+        default: "slim"
+        type: choice
+        options:
+          - slim      # 精简模式 - VLESS/VMess/Trojan/SS/Hy2/Naive
+          - full      # 完整模式 - 全部协议
+          - custom    # 自定义模式 - 手动选择
+      # ====== Custom Protocol Options (only for 'custom' mode) ======
+      proto_vless:
+        description: "├─ VLESS (Reality support)"
+        type: boolean
+        default: true
+      proto_vmess:
+        description: "├─ VMess"
+        type: boolean
+        default: true
+      proto_trojan:
+        description: "├─ Trojan"
+        type: boolean
+        default: true
+      proto_shadowsocks:
+        description: "├─ Shadowsocks"
+        type: boolean
+        default: true
+      proto_hysteria2:
+        description: "├─ Hysteria2"
+        type: boolean
+        default: true
+      proto_naive:
+        description: "├─ NaïveProxy"
+        type: boolean
+        default: true
+      proto_hysteria:
+        description: "├─ Hysteria (v1)"
+        type: boolean
+        default: false
+      proto_tuic:
+        description: "├─ TUIC"
+        type: boolean
+        default: false
+      proto_shadowtls:
+        description: "├─ ShadowTLS"
+        type: boolean
+        default: false
+      proto_anytls:
+        description: "├─ AnyTLS"
+        type: boolean
+        default: false
+      proto_wireguard:
+        description: "├─ WireGuard"
+        type: boolean
+        default: false
+      proto_tailscale:
+        description: "├─ Tailscale"
+        type: boolean
+        default: false
+      proto_ssh:
+        description: "├─ SSH"
+        type: boolean
+        default: false
+      proto_tor:
+        description: "└─ Tor"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -48,6 +115,10 @@ jobs:
       android_matrix: ${{ steps.generate.outputs.android_matrix }}
       desktop_matrix: ${{ steps.generate.outputs.desktop_matrix }}
       has_builds: ${{ steps.generate.outputs.has_builds }}
+      protocol_mode: ${{ steps.protocols.outputs.protocol_mode }}
+      protocols_list: ${{ steps.protocols.outputs.protocols_list }}
+      build_tags: ${{ steps.protocols.outputs.build_tags }}
+      proto_env: ${{ steps.protocols.outputs.proto_env }}
     steps:
       - name: Generate Version Matrix
         id: generate
@@ -150,6 +221,123 @@ jobs:
           echo "desktop_matrix=$(echo "$DESKTOP_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
           echo "has_builds=$HAS_BUILDS" >> "$GITHUB_OUTPUT"
 
+      - name: Generate Protocol Config
+        id: protocols
+        run: |
+          set -euo pipefail
+          
+          PROTOCOL_MODE="${{ inputs.protocol_mode }}"
+          echo "Protocol Mode: $PROTOCOL_MODE"
+          
+          # Define protocol states based on mode
+          case "$PROTOCOL_MODE" in
+            slim)
+              # Slim mode - current default protocols
+              PROTO_VLESS=true
+              PROTO_VMESS=true
+              PROTO_TROJAN=true
+              PROTO_SHADOWSOCKS=true
+              PROTO_HYSTERIA2=true
+              PROTO_NAIVE=true
+              PROTO_HYSTERIA=false
+              PROTO_TUIC=false
+              PROTO_SHADOWTLS=false
+              PROTO_ANYTLS=false
+              PROTO_WIREGUARD=false
+              PROTO_TAILSCALE=false
+              PROTO_SSH=false
+              PROTO_TOR=false
+              ;;
+            full)
+              # Full mode - all protocols enabled
+              PROTO_VLESS=true
+              PROTO_VMESS=true
+              PROTO_TROJAN=true
+              PROTO_SHADOWSOCKS=true
+              PROTO_HYSTERIA2=true
+              PROTO_NAIVE=true
+              PROTO_HYSTERIA=true
+              PROTO_TUIC=true
+              PROTO_SHADOWTLS=true
+              PROTO_ANYTLS=true
+              PROTO_WIREGUARD=true
+              PROTO_TAILSCALE=true
+              PROTO_SSH=true
+              PROTO_TOR=true
+              ;;
+            custom)
+              # Custom mode - use user selections
+              PROTO_VLESS=${{ inputs.proto_vless }}
+              PROTO_VMESS=${{ inputs.proto_vmess }}
+              PROTO_TROJAN=${{ inputs.proto_trojan }}
+              PROTO_SHADOWSOCKS=${{ inputs.proto_shadowsocks }}
+              PROTO_HYSTERIA2=${{ inputs.proto_hysteria2 }}
+              PROTO_NAIVE=${{ inputs.proto_naive }}
+              PROTO_HYSTERIA=${{ inputs.proto_hysteria }}
+              PROTO_TUIC=${{ inputs.proto_tuic }}
+              PROTO_SHADOWTLS=${{ inputs.proto_shadowtls }}
+              PROTO_ANYTLS=${{ inputs.proto_anytls }}
+              PROTO_WIREGUARD=${{ inputs.proto_wireguard }}
+              PROTO_TAILSCALE=${{ inputs.proto_tailscale }}
+              PROTO_SSH=${{ inputs.proto_ssh }}
+              PROTO_TOR=${{ inputs.proto_tor }}
+              ;;
+          esac
+          
+          # Generate protocol list for release notes
+          PROTOCOLS="Direct, Block, DNS, Socks, HTTP, Mixed, Selector, URLTest"
+          [[ "$PROTO_VLESS" == "true" ]] && PROTOCOLS="$PROTOCOLS, VLESS"
+          [[ "$PROTO_VMESS" == "true" ]] && PROTOCOLS="$PROTOCOLS, VMess"
+          [[ "$PROTO_TROJAN" == "true" ]] && PROTOCOLS="$PROTOCOLS, Trojan"
+          [[ "$PROTO_SHADOWSOCKS" == "true" ]] && PROTOCOLS="$PROTOCOLS, Shadowsocks"
+          [[ "$PROTO_HYSTERIA2" == "true" ]] && PROTOCOLS="$PROTOCOLS, Hysteria2"
+          [[ "$PROTO_NAIVE" == "true" ]] && PROTOCOLS="$PROTOCOLS, NaïveProxy"
+          [[ "$PROTO_HYSTERIA" == "true" ]] && PROTOCOLS="$PROTOCOLS, Hysteria"
+          [[ "$PROTO_TUIC" == "true" ]] && PROTOCOLS="$PROTOCOLS, TUIC"
+          [[ "$PROTO_SHADOWTLS" == "true" ]] && PROTOCOLS="$PROTOCOLS, ShadowTLS"
+          [[ "$PROTO_ANYTLS" == "true" ]] && PROTOCOLS="$PROTOCOLS, AnyTLS"
+          [[ "$PROTO_WIREGUARD" == "true" ]] && PROTOCOLS="$PROTOCOLS, WireGuard"
+          [[ "$PROTO_TAILSCALE" == "true" ]] && PROTOCOLS="$PROTOCOLS, Tailscale"
+          [[ "$PROTO_SSH" == "true" ]] && PROTOCOLS="$PROTOCOLS, SSH"
+          [[ "$PROTO_TOR" == "true" ]] && PROTOCOLS="$PROTOCOLS, Tor"
+          
+          echo "Included protocols: $PROTOCOLS"
+          
+          # Generate build tags
+          BUILD_TAGS="with_gvisor,with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0"
+          [[ "$PROTO_NAIVE" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_naive_outbound"
+          [[ "$PROTO_WIREGUARD" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_wireguard"
+          [[ "$PROTO_TAILSCALE" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_tailscale"
+          [[ "$PROTO_TOR" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_embedded_tor"
+          
+          echo "Build tags: $BUILD_TAGS"
+          
+          # Generate environment variables JSON for build jobs
+          PROTO_ENV=$(cat <<EOF
+          {
+            "PROTO_VLESS": "$PROTO_VLESS",
+            "PROTO_VMESS": "$PROTO_VMESS",
+            "PROTO_TROJAN": "$PROTO_TROJAN",
+            "PROTO_SHADOWSOCKS": "$PROTO_SHADOWSOCKS",
+            "PROTO_HYSTERIA2": "$PROTO_HYSTERIA2",
+            "PROTO_NAIVE": "$PROTO_NAIVE",
+            "PROTO_HYSTERIA": "$PROTO_HYSTERIA",
+            "PROTO_TUIC": "$PROTO_TUIC",
+            "PROTO_SHADOWTLS": "$PROTO_SHADOWTLS",
+            "PROTO_ANYTLS": "$PROTO_ANYTLS",
+            "PROTO_WIREGUARD": "$PROTO_WIREGUARD",
+            "PROTO_TAILSCALE": "$PROTO_TAILSCALE",
+            "PROTO_SSH": "$PROTO_SSH",
+            "PROTO_TOR": "$PROTO_TOR"
+          }
+          EOF
+          )
+          
+          # Output for other jobs (escape for JSON)
+          echo "protocol_mode=$PROTOCOL_MODE" >> "$GITHUB_OUTPUT"
+          echo "protocols_list=$PROTOCOLS" >> "$GITHUB_OUTPUT"
+          echo "build_tags=$BUILD_TAGS" >> "$GITHUB_OUTPUT"
+          echo "proto_env=$(echo "$PROTO_ENV" | jq -c .)" >> "$GITHUB_OUTPUT"
   # ============================================================================
   # ANDROID BUILD
   # ============================================================================
@@ -176,11 +364,51 @@ jobs:
           submodules: 'recursive'
           path: sing-box
 
-      - name: Apply slim modifications
+      - name: Apply protocol modifications
         run: |
-          cp custom/include/registry.go sing-box/include/registry.go
-          cp custom/include/quic.go sing-box/include/quic.go
-          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          echo "Protocol mode: $PROTOCOL_MODE"
+          
+          case "$PROTOCOL_MODE" in
+            slim)
+              # Use pre-configured slim registry files
+              echo "Using pre-configured slim registry files..."
+              cp custom/include/registry.go sing-box/include/registry.go
+              cp custom/include/quic.go sing-box/include/quic.go
+              cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+              ;;
+            full)
+              # Use upstream files as-is (no modification needed)
+              echo "Using upstream registry files (full mode)..."
+              ;;
+            custom)
+              # Generate registry files dynamically based on selected protocols
+              echo "Generating custom registry files..."
+              
+              # Parse protocol configuration from JSON
+              PROTO_ENV='${{ needs.strategy_matrix.outputs.proto_env }}'
+              export PROTO_VLESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VLESS')
+              export PROTO_VMESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VMESS')
+              export PROTO_TROJAN=$(echo "$PROTO_ENV" | jq -r '.PROTO_TROJAN')
+              export PROTO_SHADOWSOCKS=$(echo "$PROTO_ENV" | jq -r '.PROTO_SHADOWSOCKS')
+              export PROTO_HYSTERIA2=$(echo "$PROTO_ENV" | jq -r '.PROTO_HYSTERIA2')
+              export PROTO_NAIVE=$(echo "$PROTO_ENV" | jq -r '.PROTO_NAIVE')
+              export PROTO_HYSTERIA=$(echo "$PROTO_ENV" | jq -r '.PROTO_HYSTERIA')
+              export PROTO_TUIC=$(echo "$PROTO_ENV" | jq -r '.PROTO_TUIC')
+              export PROTO_SHADOWTLS=$(echo "$PROTO_ENV" | jq -r '.PROTO_SHADOWTLS')
+              export PROTO_ANYTLS=$(echo "$PROTO_ENV" | jq -r '.PROTO_ANYTLS')
+              export PROTO_WIREGUARD=$(echo "$PROTO_ENV" | jq -r '.PROTO_WIREGUARD')
+              export PROTO_TAILSCALE=$(echo "$PROTO_ENV" | jq -r '.PROTO_TAILSCALE')
+              export PROTO_SSH=$(echo "$PROTO_ENV" | jq -r '.PROTO_SSH')
+              export PROTO_TOR=$(echo "$PROTO_ENV" | jq -r '.PROTO_TOR')
+              export OUTPUT_DIR="sing-box/include"
+              
+              chmod +x custom/.github/scripts/generate-registry.sh
+              bash custom/.github/scripts/generate-registry.sh
+              ;;
+          esac
+          
+          echo "Protocol modifications applied."
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -205,8 +433,10 @@ jobs:
           export PATH="$PATH:$(go env GOPATH)/bin"
           
           VERSION="${{ matrix.version }}"
-          TAGS="${{ env.SLIM_TAGS_NAIVE }},with_conntrack"
+          TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_conntrack"
           LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
+          
+          echo "Building with tags: $TAGS"
           
           gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 23 \
             -javapkg=io.nekohasekai -libname=libbox -trimpath -buildvcs=false \
@@ -290,13 +520,14 @@ jobs:
           EOF
           
           cd dist
-          mv *.apk "sing-box-${{ matrix.version }}-android-arm64-slim.apk"
+          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          mv *.apk "sing-box-${{ matrix.version }}-android-arm64-${PROTOCOL_MODE}.apk"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          # Unique name for each matrix version
-          name: android-arm64-slim-${{ matrix.version }}
+          # Unique name for each matrix version and protocol mode
+          name: android-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.version }}
           path: dist
           retention-days: 1
 
@@ -322,19 +553,76 @@ jobs:
           fetch-depth: 0
           path: sing-box
 
-      - name: Apply slim modifications (Windows)
+      - name: Apply protocol modifications (Windows)
         if: matrix.os == 'windows'
+        shell: pwsh
         run: |
-          Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
-          Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
-          Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+          $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          Write-Host "Protocol mode: $PROTOCOL_MODE"
+          
+          switch ($PROTOCOL_MODE) {
+            "slim" {
+              Write-Host "Using pre-configured slim registry files..."
+              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
+              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
+              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+            }
+            "full" {
+              Write-Host "Using upstream registry files (full mode)..."
+            }
+            "custom" {
+              Write-Host "Custom mode on Windows - using slim files as base..."
+              # For Windows, we use the pre-generated slim files for now
+              # Full custom generation requires bash
+              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
+              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
+              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+            }
+          }
+          Write-Host "Protocol modifications applied."
 
-      - name: Apply slim modifications (Unix)
+      - name: Apply protocol modifications (Unix)
         if: matrix.os != 'windows'
         run: |
-          cp custom/include/registry.go sing-box/include/registry.go
-          cp custom/include/quic.go sing-box/include/quic.go
-          cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          echo "Protocol mode: $PROTOCOL_MODE"
+          
+          case "$PROTOCOL_MODE" in
+            slim)
+              echo "Using pre-configured slim registry files..."
+              cp custom/include/registry.go sing-box/include/registry.go
+              cp custom/include/quic.go sing-box/include/quic.go
+              cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+              ;;
+            full)
+              echo "Using upstream registry files (full mode)..."
+              ;;
+            custom)
+              echo "Generating custom registry files..."
+              
+              PROTO_ENV='${{ needs.strategy_matrix.outputs.proto_env }}'
+              export PROTO_VLESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VLESS')
+              export PROTO_VMESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VMESS')
+              export PROTO_TROJAN=$(echo "$PROTO_ENV" | jq -r '.PROTO_TROJAN')
+              export PROTO_SHADOWSOCKS=$(echo "$PROTO_ENV" | jq -r '.PROTO_SHADOWSOCKS')
+              export PROTO_HYSTERIA2=$(echo "$PROTO_ENV" | jq -r '.PROTO_HYSTERIA2')
+              export PROTO_NAIVE=$(echo "$PROTO_ENV" | jq -r '.PROTO_NAIVE')
+              export PROTO_HYSTERIA=$(echo "$PROTO_ENV" | jq -r '.PROTO_HYSTERIA')
+              export PROTO_TUIC=$(echo "$PROTO_ENV" | jq -r '.PROTO_TUIC')
+              export PROTO_SHADOWTLS=$(echo "$PROTO_ENV" | jq -r '.PROTO_SHADOWTLS')
+              export PROTO_ANYTLS=$(echo "$PROTO_ENV" | jq -r '.PROTO_ANYTLS')
+              export PROTO_WIREGUARD=$(echo "$PROTO_ENV" | jq -r '.PROTO_WIREGUARD')
+              export PROTO_TAILSCALE=$(echo "$PROTO_ENV" | jq -r '.PROTO_TAILSCALE')
+              export PROTO_SSH=$(echo "$PROTO_ENV" | jq -r '.PROTO_SSH')
+              export PROTO_TOR=$(echo "$PROTO_ENV" | jq -r '.PROTO_TOR')
+              export OUTPUT_DIR="sing-box/include"
+              
+              chmod +x custom/.github/scripts/generate-registry.sh
+              bash custom/.github/scripts/generate-registry.sh
+              ;;
+          esac
+          
+          echo "Protocol modifications applied."
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -353,7 +641,8 @@ jobs:
           $env:CGO_ENABLED = "0"
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.arch }}"
-          $TAGS = "${{ env.SLIM_TAGS_NAIVE }},with_purego"
+          $TAGS = "${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
+          Write-Host "Building with tags: $TAGS"
           go build -v -trimpath -o dist/sing-box.exe -tags "$TAGS" `
             -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
             ./cmd/sing-box
@@ -364,7 +653,8 @@ jobs:
         run: |
           set -xeuo pipefail
           mkdir -p dist
-          TAGS="${{ env.SLIM_TAGS_NAIVE }}"
+          TAGS="${{ needs.strategy_matrix.outputs.build_tags }}"
+          echo "Building with tags: $TAGS"
           CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} \
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
             -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
@@ -376,7 +666,8 @@ jobs:
         run: |
           set -xeuo pipefail
           mkdir -p dist
-          TAGS="${{ env.SLIM_TAGS_NAIVE }},with_purego"
+          TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
+          echo "Building with tags: $TAGS"
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} \
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
             -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
@@ -402,7 +693,8 @@ jobs:
         if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
-          $DIR_NAME = "sing-box-${{ matrix.config.version }}-windows-${{ matrix.arch }}-slim"
+          $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          $DIR_NAME = "sing-box-${{ matrix.config.version }}-windows-${{ matrix.arch }}-$PROTOCOL_MODE"
           mkdir "dist/$DIR_NAME"
           Copy-Item LICENSE "dist/$DIR_NAME"
           Copy-Item "dist/sing-box.exe" "dist/$DIR_NAME"
@@ -415,7 +707,8 @@ jobs:
         working-directory: sing-box
         run: |
           set -xeuo pipefail
-          DIR_NAME="sing-box-${{ matrix.config.version }}-darwin-${{ matrix.arch }}-slim"
+          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          DIR_NAME="sing-box-${{ matrix.config.version }}-darwin-${{ matrix.arch }}-${PROTOCOL_MODE}"
           cd dist
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
@@ -427,7 +720,8 @@ jobs:
         working-directory: sing-box
         run: |
           set -xeuo pipefail
-          DIR_NAME="sing-box-${{ matrix.config.version }}-linux-${{ matrix.arch }}-slim"
+          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          DIR_NAME="sing-box-${{ matrix.config.version }}-linux-${{ matrix.arch }}-${PROTOCOL_MODE}"
           cd dist
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
@@ -438,7 +732,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          name: ${{ matrix.os }}-${{ matrix.arch }}-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.config.version }}
           path: sing-box/dist/*.zip
           if-no-files-found: ignore
 
@@ -446,7 +740,7 @@ jobs:
         if: matrix.os != 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ matrix.arch }}-slim-${{ matrix.config.version }}
+          name: ${{ matrix.os }}-${{ matrix.arch }}-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.config.version }}
           path: sing-box/dist/*.tar.gz
           if-no-files-found: ignore
 
@@ -467,7 +761,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          pattern: "*-slim-${{ matrix.config.version }}"
+          pattern: "*-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.config.version }}"
           merge-multiple: true
 
       - name: Prepare Release Files
@@ -482,40 +776,44 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ matrix.config.version }}-slim
-          name: sing-box v${{ matrix.config.version }} Slim Build
+          tag_name: v${{ matrix.config.version }}-${{ needs.strategy_matrix.outputs.protocol_mode }}
+          name: sing-box v${{ matrix.config.version }} (${{ needs.strategy_matrix.outputs.protocol_mode }} mode)
           body: |
-            ## sing-box Slim Build - Multi-Platform Release
+            ## sing-box Build - Multi-Platform Release
 
             **Based on upstream sing-box ${{ matrix.config.tag }}**
+            
+            **Protocol Mode: `${{ needs.strategy_matrix.outputs.protocol_mode }}`**
             
             ### 📦 Downloads
             
             | Platform | File |
             |----------|------|
-            | Android (arm64) | `sing-box-${{ matrix.config.version }}-android-arm64-slim.apk` |
-            | Windows (amd64) | `sing-box-${{ matrix.config.version }}-windows-amd64-slim.zip` |
-            | Windows (arm64) | `sing-box-${{ matrix.config.version }}-windows-arm64-slim.zip` |
-            | macOS (Intel) | `sing-box-${{ matrix.config.version }}-darwin-amd64-slim.tar.gz` |
-            | macOS (Silicon) | `sing-box-${{ matrix.config.version }}-darwin-arm64-slim.tar.gz` |
-            | Linux (amd64) | `sing-box-${{ matrix.config.version }}-linux-amd64-slim.tar.gz` |
-            | Linux (arm64) | `sing-box-${{ matrix.config.version }}-linux-arm64-slim.tar.gz` |
+            | Android (arm64) | `sing-box-${{ matrix.config.version }}-android-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.apk` |
+            | Windows (amd64) | `sing-box-${{ matrix.config.version }}-windows-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.zip` |
+            | Windows (arm64) | `sing-box-${{ matrix.config.version }}-windows-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.zip` |
+            | macOS (Intel) | `sing-box-${{ matrix.config.version }}-darwin-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
+            | macOS (Silicon) | `sing-box-${{ matrix.config.version }}-darwin-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
+            | Linux (amd64) | `sing-box-${{ matrix.config.version }}-linux-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
+            | Linux (arm64) | `sing-box-${{ matrix.config.version }}-linux-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
 
             ### ✅ Included Protocols
-            - VLESS (Reality), VMess, Trojan, Shadowsocks, Hysteria2
-            - **NaiveProxy** support:
-              - Windows: includes `libcronet.dll`
-              - Linux: includes `libcronet.so` (place in same directory as binary)
-              - macOS: CGO-built, no external library needed
-              - Android: included
             
-            ### ❌ Removed
-            - Tor, SSH, ShadowTLS, AnyTLS, TUIC, Hysteria v1, WireGuard, Tailscale
+            ${{ needs.strategy_matrix.outputs.protocols_list }}
             
+            **NaïveProxy support** (if enabled):
+            - Windows: includes `libcronet.dll`
+            - Linux: includes `libcronet.so` (place in same directory as binary)
+            - macOS: CGO-built, no external library needed
+            - Android: included
+            
+            ### 📋 Build Tags
+            ```
+            ${{ needs.strategy_matrix.outputs.build_tags }}
+            ```
 
           draft: false
           prerelease: ${{ matrix.config.prerelease }}
           files: release_files/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
