@@ -29,15 +29,15 @@ on:
           - linux
       # ====== Protocol Selection ======
       protocol_mode:
-        description: "Protocol Mode"
+        description: "Protocol Mode (slim/full: ignore checkboxes; custom: use checkboxes)"
         required: true
         default: "slim"
         type: choice
         options:
-          - slim      # 精简模式 - VLESS/VMess/Trojan/SS/Hy2/Naive
-          - full      # 完整模式 - 全部协议
-          - custom    # 自定义模式 - 手动选择
-      # ====== Custom Protocol Options (only for 'custom' mode) ======
+          - slim      # 精简: VLESS/VMess/Trojan/SS/Hy2/Naive (忽略下方选项)
+          - full      # 完整: 全部协议 (忽略下方选项)
+          - custom    # 自定义: 根据下方勾选决定
+      # ====== Custom Protocol Options (ONLY used when protocol_mode = 'custom') ======
       proto_vless:
         description: "├─ VLESS (Reality support)"
         type: boolean
