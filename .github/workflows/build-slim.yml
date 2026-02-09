@@ -342,7 +342,7 @@ jobs:
   # ANDROID BUILD
   # ============================================================================
   build_android:
-    name: Android (${{ matrix.version }})
+    name: Android (${{ matrix.version || 'Build' }})
     runs-on: ubuntu-latest
     needs: strategy_matrix
     if: ${{ needs.strategy_matrix.outputs.android_matrix != '[]' }}
@@ -412,15 +412,20 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: ^1.25.5 }
+        with:
+          go-version: '1.24.0'
+          cache: true
 
       - name: Setup Android NDK
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with: { ndk-version: r28, local-cache: true }
 
-      - name: Setup OpenJDK
-        run: sudo apt update && sudo apt install -y openjdk-17-jdk-headless
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
       - name: Set tag
         working-directory: sing-box
@@ -532,7 +537,7 @@ jobs:
           retention-days: 1
 
   build_desktop:
-    name: ${{ matrix.platform }} ${{ matrix.arch }} (${{ matrix.config.version }})
+    name: ${{ matrix.platform && format('{0} {1} ({2})', matrix.platform, matrix.arch, matrix.config.version) || 'Desktop Build' }}
     runs-on: ${{ matrix.runner }}
     needs: strategy_matrix
     if: ${{ needs.strategy_matrix.outputs.desktop_matrix != '[]' }}
@@ -626,7 +631,9 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: ^1.25.5 }
+        with:
+          go-version: '1.24.0'
+          cache: true
 
       - name: Set tag
         working-directory: sing-box
@@ -748,7 +755,7 @@ jobs:
   # CREATE RELEASES
   # ============================================================================
   release:
-    name: Release ${{ matrix.config.tag }}
+    name: Release ${{ matrix.config.tag || 'Build' }}
     runs-on: ubuntu-latest
     needs: [strategy_matrix, build_android, build_desktop]
     if: always() && needs.strategy_matrix.result == 'success'
