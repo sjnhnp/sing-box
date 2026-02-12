@@ -412,7 +412,9 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: '1.25.7' }
+        with:
+          go-version: '1.25.7'
+          check-latest: false
 
       - name: Setup Android NDK
         id: setup-ndk
@@ -628,7 +630,9 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: '1.25.7' }
+        with:
+          go-version: '1.25.7'
+          check-latest: false
 
       - name: Set tag
         working-directory: sing-box
