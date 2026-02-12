@@ -112,7 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
-      build_matrix: ${{  steps.generate.outputs.build_matrix }}
+      build_matrix: ${{ steps.generate.outputs.build_matrix }}
       has_builds: ${{ steps.generate.outputs.has_builds }}
       protocol_mode: ${{ steps.protocols.outputs.protocol_mode }}
       protocols_list: ${{ steps.protocols.outputs.protocols_list }}
@@ -131,7 +131,7 @@ jobs:
             local v=$1
             local t=$2
             local p=$3
-            VERSIONS_JSON=$(echo "$VERSIONS_JSON" | jq --arg v "$v" --arg t "$t" --argjson p "$p" \
+            VERSIONS_JSON=$(echo "$VERSIONS_JSON" | jq -c --arg v "$v" --arg t "$t" --argjson p "$p" \
               '. + [{"version": $v, "tag": $t, "prerelease": $p}]')
           }
 
@@ -193,9 +193,15 @@ jobs:
             HAS_BUILDS="true"
           fi
           
-          echo "build_matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
-          echo "matrix=$VERSIONS_JSON" >> "$GITHUB_OUTPUT"
-          echo "has_builds=$HAS_BUILDS" >> "$GITHUB_OUTPUT"
+          {
+            echo "build_matrix<<EOF"
+            echo "$BUILD_MATRIX"
+            echo "EOF"
+            echo "matrix<<EOF"
+            echo "$VERSIONS_JSON"
+            echo "EOF"
+            echo "has_builds=$HAS_BUILDS"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Generate Protocol Config
         id: protocols
@@ -309,11 +315,14 @@ jobs:
           EOF
           )
           
-          # Output for other jobs (escape for JSON)
-          echo "protocol_mode=$PROTOCOL_MODE" >> "$GITHUB_OUTPUT"
-          echo "protocols_list=$PROTOCOLS" >> "$GITHUB_OUTPUT"
-          echo "build_tags=$BUILD_TAGS" >> "$GITHUB_OUTPUT"
-          echo "proto_env=$(echo "$PROTO_ENV" | jq -c .)" >> "$GITHUB_OUTPUT"
+          {
+            echo "protocol_mode=$PROTOCOL_MODE"
+            echo "protocols_list=$PROTOCOLS"
+            echo "build_tags=$BUILD_TAGS"
+            echo "proto_env<<EOF"
+            echo "$PROTO_ENV" | jq -c .
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
   # ============================================================================
   # ANDROID BUILD
   # ============================================================================
