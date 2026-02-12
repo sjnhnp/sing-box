@@ -415,6 +415,7 @@ jobs:
         with:
           go-version: '1.25.7'
           check-latest: false
+          cache-dependency-path: sing-box/go.sum
 
       - name: Setup Android NDK
         id: setup-ndk
@@ -633,6 +634,7 @@ jobs:
         with:
           go-version: '1.25.7'
           check-latest: false
+          cache-dependency-path: sing-box/go.sum
 
       - name: Set tag
         working-directory: sing-box
