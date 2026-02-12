@@ -112,8 +112,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.generate.outputs.matrix }}
-      android_matrix: ${{ steps.generate.outputs.android_matrix }}
-      desktop_matrix: ${{ steps.generate.outputs.desktop_matrix }}
+      build_matrix: ${{  steps.generate.outputs.build_matrix }}
       has_builds: ${{ steps.generate.outputs.has_builds }}
       protocol_mode: ${{ steps.protocols.outputs.protocol_mode }}
       protocols_list: ${{ steps.protocols.outputs.protocols_list }}
@@ -125,100 +124,77 @@ jobs:
         run: |
           set -euo pipefail
           
-          # Initialize lists
+          # Initialize versions list
           VERSIONS_JSON="[]"
           
           add_version() {
             local v=$1
             local t=$2
             local p=$3
-            # Use jq to append object to array
             VERSIONS_JSON=$(echo "$VERSIONS_JSON" | jq --arg v "$v" --arg t "$t" --argjson p "$p" \
               '. + [{"version": $v, "tag": $t, "prerelease": $p}]')
           }
 
           if [ -n "${{ inputs.version }}" ]; then
-             # Manual Version
              VER="${{ inputs.version }}"
              TAG="v${VER}"
-             # Guess prerelease based on hyphen
              if [[ "$VER" == *"-"* ]]; then PRE=true; else PRE=false; fi
              add_version "$VER" "$TAG" "$PRE"
-             echo "Mode: Manual ($VER)"
           else
-             # Fetch from Upstream
              echo "Fetching releases from SagerNet/sing-box..."
              RELEASES_JSON=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases")
-             
              LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.prerelease == true)] | .[0] | .tag_name')
              LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.prerelease == false)] | .[0] | .tag_name')
-             
              MODE="${{ inputs.mode }}"
-             
              if [[ "$MODE" == "beta" || "$MODE" == "all" ]]; then
                 if [ -n "$LATEST_BETA" ] && [ "$LATEST_BETA" != "null" ]; then
                   VER=$(echo "$LATEST_BETA" | sed 's/^v//')
                   add_version "$VER" "$LATEST_BETA" true
-                  echo "Found Beta: $LATEST_BETA"
                 fi
              fi
-             
              if [[ "$MODE" == "stable" || "$MODE" == "all" ]]; then
                 if [ -n "$LATEST_STABLE" ] && [ "$LATEST_STABLE" != "null" ]; then
                   VER=$(echo "$LATEST_STABLE" | sed 's/^v//')
                   add_version "$VER" "$LATEST_STABLE" false
-                  echo "Found Stable: $LATEST_STABLE"
                 fi
              fi
           fi
           
-          echo "Generated Version Matrix:"
-          echo "$VERSIONS_JSON" | jq .
-          
-          # Generate platform-specific matrices
+          # Generate unified build matrix
+          BUILD_MATRIX="[]"
           PLATFORM="${{ inputs.platform }}"
           
-          # Android matrix
+          # Android
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "android" ]]; then
-            ANDROID_MATRIX="$VERSIONS_JSON"
-          else
-            ANDROID_MATRIX="[]"
+            ANDROID_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] | {type: "android", platform: "Android", arch: "arm64", runner: "ubuntu-latest", os: "android", version: .version, tag: .tag, prerelease: .prerelease}]')
+            BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$ANDROID_PART" '. + $p')
           fi
-          
-          # Desktop matrix
-          DESKTOP_MATRIX="[]"
           
           # Windows
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "windows" ]]; then
-            DESKTOP_MATRIX=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {platform: "Windows", arch: $arch, runner: "windows-latest", os: "windows", config: $v}]')
+            WINDOWS_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {type: "desktop", platform: "Windows", arch: $arch, runner: "windows-latest", os: "windows", version: $v.version, tag: $v.tag, prerelease: $v.prerelease}]')
+            BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$WINDOWS_PART" '. + $p')
           fi
           
           # macOS
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "macos" ]]; then
-            MACOS_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {platform: "macOS", arch: $arch, runner: "macos-latest", os: "darwin", config: $v}]')
-            DESKTOP_MATRIX=$(echo "$DESKTOP_MATRIX" | jq -c --argjson p "$MACOS_PART" '. + $p')
+            MACOS_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {type: "desktop", platform: "macOS", arch: $arch, runner: "macos-latest", os: "darwin", version: $v.version, tag: $v.tag, prerelease: $v.prerelease}]')
+            BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$MACOS_PART" '. + $p')
           fi
           
           # Linux
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "linux" ]]; then
-            LINUX_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {platform: "Linux", arch: $arch, runner: "ubuntu-latest", os: "linux", config: $v}]')
-            DESKTOP_MATRIX=$(echo "$DESKTOP_MATRIX" | jq -c --argjson p "$LINUX_PART" '. + $p')
+            LINUX_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {type: "desktop", platform: "Linux", arch: $arch, runner: "ubuntu-latest", os: "linux", version: $v.version, tag: $v.tag, prerelease: $v.prerelease}]')
+            BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$LINUX_PART" '. + $p')
           fi
           
-          # Check if any builds will run
           HAS_BUILDS="false"
-          if [[ "$ANDROID_MATRIX" != "[]" || "$DESKTOP_MATRIX" != "[]" ]]; then
+          if [[ "$BUILD_MATRIX" != "[]" ]]; then
             HAS_BUILDS="true"
           fi
           
-          echo "Platform: $PLATFORM"
-          echo "Android builds: $(echo "$ANDROID_MATRIX" | jq length)"
-          echo "Desktop builds: $(echo "$DESKTOP_MATRIX" | jq length)"
-          
-          # Set outputs
-          echo "matrix=$(echo "$VERSIONS_JSON" | jq -c .)" >> "$GITHUB_OUTPUT"
-          echo "android_matrix=$(echo "$ANDROID_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
-          echo "desktop_matrix=$(echo "$DESKTOP_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
+          echo "build_matrix=$BUILD_MATRIX" >> "$GITHUB_OUTPUT"
+          echo "matrix=$VERSIONS_JSON" >> "$GITHUB_OUTPUT"
           echo "has_builds=$HAS_BUILDS" >> "$GITHUB_OUTPUT"
 
       - name: Generate Protocol Config
@@ -341,15 +317,15 @@ jobs:
   # ============================================================================
   # ANDROID BUILD
   # ============================================================================
-  build_android:
-    name: Android (${{ matrix.version }})
-    runs-on: ubuntu-latest
+  build:
+    name: ${{ matrix.platform }} ${{ matrix.arch }} (${{ matrix.version }})
+    runs-on: ${{ matrix.runner }}
     needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.android_matrix != '[]' }}
+    if: needs.strategy_matrix.outputs.has_builds == 'true'
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.strategy_matrix.outputs.android_matrix) }}
+        include: ${{ fromJson(needs.strategy_matrix.outputs.build_matrix) }}
     steps:
       - name: Checkout custom
         uses: actions/checkout@v4
@@ -364,28 +340,23 @@ jobs:
           submodules: 'recursive'
           path: sing-box
 
-      - name: Apply protocol modifications
+      - name: Apply protocol modifications (Unix)
+        if: matrix.os != 'windows'
         run: |
           PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
           echo "Protocol mode: $PROTOCOL_MODE"
-          
           case "$PROTOCOL_MODE" in
             slim)
-              # Use pre-configured slim registry files
               echo "Using pre-configured slim registry files..."
               cp custom/include/registry.go sing-box/include/registry.go
               cp custom/include/quic.go sing-box/include/quic.go
               cp custom/include/quic_stub.go sing-box/include/quic_stub.go
               ;;
             full)
-              # Use upstream files as-is (no modification needed)
               echo "Using upstream registry files (full mode)..."
               ;;
             custom)
-              # Generate registry files dynamically based on selected protocols
               echo "Generating custom registry files..."
-              
-              # Parse protocol configuration from JSON
               PROTO_ENV='${{ needs.strategy_matrix.outputs.proto_env }}'
               export PROTO_VLESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VLESS')
               export PROTO_VMESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VMESS')
@@ -402,13 +373,29 @@ jobs:
               export PROTO_SSH=$(echo "$PROTO_ENV" | jq -r '.PROTO_SSH')
               export PROTO_TOR=$(echo "$PROTO_ENV" | jq -r '.PROTO_TOR')
               export OUTPUT_DIR="sing-box/include"
-              
               chmod +x custom/.github/scripts/generate-registry.sh
               bash custom/.github/scripts/generate-registry.sh
               ;;
           esac
-          
-          echo "Protocol modifications applied."
+
+      - name: Apply protocol modifications (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          switch ($PROTOCOL_MODE) {
+            "slim" {
+              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
+              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
+              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+            }
+            "full" {}
+            "custom" {
+              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
+              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
+              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+            }
+          }
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -418,11 +405,13 @@ jobs:
           cache-dependency-path: sing-box/go.sum
 
       - name: Setup Android NDK
+        if: matrix.type == 'android'
         id: setup-ndk
         uses: nttld/setup-ndk@v1
         with: { ndk-version: r29, local-cache: false }
 
       - name: Setup Java
+        if: matrix.type == 'android'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -430,20 +419,18 @@ jobs:
 
       - name: Set tag
         working-directory: sing-box
+        shell: bash
         run: git tag v${{ matrix.version }} -f || true
 
-      - name: Build library
+      - name: Build Android Library
+        if: matrix.type == 'android'
         working-directory: sing-box
         run: |-
           make lib_install
           export PATH="$PATH:$(go env GOPATH)/bin"
-          
           VERSION="${{ matrix.version }}"
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_conntrack"
           LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -s -w -buildid= -checklinkname=0"
-          
-          echo "Building with tags: $TAGS"
-          
           gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 23 \
             -javapkg=io.nekohasekai -libname=libbox -trimpath -buildvcs=false \
             -ldflags "${LDFLAGS}" -tags "${TAGS}" ./experimental/libbox
@@ -451,197 +438,7 @@ jobs:
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           GODEBUG: multipathtcp=0
 
-      - name: Checkout Android Client
-        working-directory: sing-box
-        run: |-
-          rm -rf clients/android
-          git clone -b dev https://github.com/sjnhnp/sing-box-for-android.git clients/android
-
-      - name: Gradle cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle
-          key: gradle-android-slim-${{ hashFiles('sing-box/clients/android/**/*.gradle*') }}
-
-      - name: Update Version Prop
-        working-directory: sing-box
-        run: |
-          VERSION="${{ matrix.version }}"
-          MAJOR=$(echo "$VERSION" | cut -d. -f1)
-          MINOR=$(echo "$VERSION" | cut -d. -f2)
-          PATCH_FULL=$(echo "$VERSION" | cut -d. -f3)
-          PATCH=$(echo "$PATCH_FULL" | cut -d- -f1)
-          PRERELEASE_NUM=0
-          if echo "$VERSION" | grep -q "alpha\|beta\|rc"; then
-            PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
-          fi
-          VERSION_CODE=$((MAJOR * 10000000 + MINOR * 100000 + PATCH * 1000 + PRERELEASE_NUM))
-          
-          echo "VERSION_CODE=${VERSION_CODE}" > clients/android/version.properties
-          echo "VERSION_NAME=${VERSION}" >> clients/android/version.properties
-
-      - name: Setup Keystore
-        working-directory: sing-box
-        run: |-
-          cd clients/android
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
-          cat > local.properties << EOF
-          KEYSTORE_PASS=${{ secrets.KEYSTORE_PASSWORD }}
-          ALIAS_NAME=${{ secrets.KEY_ALIAS }}
-          ALIAS_PASS=${{ secrets.KEY_PASSWORD }}
-          EOF
-
-      - name: Patch Gradle (Arm64 Only)
-        working-directory: sing-box
-        run: |-
-          cd clients/android/app
-          sed -i 's/include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")/include("arm64-v8a")/' build.gradle.kts
-          sed -i 's/isUniversalApk = true/isUniversalApk = false/' build.gradle.kts
-
-      - name: Build APK
-        working-directory: sing-box
-        run: |-
-          mkdir -p clients/android/app/libs
-          cp libbox.aar clients/android/app/libs/
-          cp libbox.aar clients/android/app/libs/libbox-legacy.aar
-          cd clients/android
-          ./gradlew :app:assembleOtherRelease --no-daemon
-        env:
-          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
-
-      - name: Prepare Artifacts
-        run: |-
-          mkdir -p dist
-          find sing-box/clients/android/app/build/outputs/apk/other/release -name "*.apk" -exec cp {} dist/ \;
-          
-          # Generate version metadata for updater
-          VERSION_CODE=$(grep VERSION_CODE sing-box/clients/android/version.properties | cut -d= -f2)
-          VERSION_NAME=$(grep VERSION_NAME sing-box/clients/android/version.properties | cut -d= -f2)
-          cat > dist/SFA-version-metadata.json << EOF
-          {
-            "version_code": ${VERSION_CODE},
-            "version_name": "${VERSION_NAME}"
-          }
-          EOF
-          
-          cd dist
-          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          mv *.apk "sing-box-${{ matrix.version }}-android-arm64-${PROTOCOL_MODE}.apk"
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          # Unique name for each matrix version and protocol mode
-          name: android-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.version }}
-          path: dist
-          retention-days: 1
-
-  build_desktop:
-    name: ${{ matrix.platform }} ${{ matrix.arch }} (${{ matrix.config.version }})
-    runs-on: ${{ matrix.runner }}
-    needs: strategy_matrix
-    if: ${{ needs.strategy_matrix.outputs.desktop_matrix != '[]' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.strategy_matrix.outputs.desktop_matrix) }}
-    steps:
-      - name: Checkout custom
-        uses: actions/checkout@v4
-        with: { path: custom }
-
-      - name: Checkout upstream
-        uses: actions/checkout@v4
-        with:
-          repository: SagerNet/sing-box
-          ref: ${{ matrix.config.tag }}
-          fetch-depth: 0
-          path: sing-box
-
-      - name: Apply protocol modifications (Windows)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          Write-Host "Protocol mode: $PROTOCOL_MODE"
-          
-          switch ($PROTOCOL_MODE) {
-            "slim" {
-              Write-Host "Using pre-configured slim registry files..."
-              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
-              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
-              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-            }
-            "full" {
-              Write-Host "Using upstream registry files (full mode)..."
-            }
-            "custom" {
-              Write-Host "Custom mode on Windows - using slim files as base..."
-              # For Windows, we use the pre-generated slim files for now
-              # Full custom generation requires bash
-              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
-              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
-              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-            }
-          }
-          Write-Host "Protocol modifications applied."
-
-      - name: Apply protocol modifications (Unix)
-        if: matrix.os != 'windows'
-        run: |
-          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          echo "Protocol mode: $PROTOCOL_MODE"
-          
-          case "$PROTOCOL_MODE" in
-            slim)
-              echo "Using pre-configured slim registry files..."
-              cp custom/include/registry.go sing-box/include/registry.go
-              cp custom/include/quic.go sing-box/include/quic.go
-              cp custom/include/quic_stub.go sing-box/include/quic_stub.go
-              ;;
-            full)
-              echo "Using upstream registry files (full mode)..."
-              ;;
-            custom)
-              echo "Generating custom registry files..."
-              
-              PROTO_ENV='${{ needs.strategy_matrix.outputs.proto_env }}'
-              export PROTO_VLESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VLESS')
-              export PROTO_VMESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VMESS')
-              export PROTO_TROJAN=$(echo "$PROTO_ENV" | jq -r '.PROTO_TROJAN')
-              export PROTO_SHADOWSOCKS=$(echo "$PROTO_ENV" | jq -r '.PROTO_SHADOWSOCKS')
-              export PROTO_HYSTERIA2=$(echo "$PROTO_ENV" | jq -r '.PROTO_HYSTERIA2')
-              export PROTO_NAIVE=$(echo "$PROTO_ENV" | jq -r '.PROTO_NAIVE')
-              export PROTO_HYSTERIA=$(echo "$PROTO_ENV" | jq -r '.PROTO_HYSTERIA')
-              export PROTO_TUIC=$(echo "$PROTO_ENV" | jq -r '.PROTO_TUIC')
-              export PROTO_SHADOWTLS=$(echo "$PROTO_ENV" | jq -r '.PROTO_SHADOWTLS')
-              export PROTO_ANYTLS=$(echo "$PROTO_ENV" | jq -r '.PROTO_ANYTLS')
-              export PROTO_WIREGUARD=$(echo "$PROTO_ENV" | jq -r '.PROTO_WIREGUARD')
-              export PROTO_TAILSCALE=$(echo "$PROTO_ENV" | jq -r '.PROTO_TAILSCALE')
-              export PROTO_SSH=$(echo "$PROTO_ENV" | jq -r '.PROTO_SSH')
-              export PROTO_TOR=$(echo "$PROTO_ENV" | jq -r '.PROTO_TOR')
-              export OUTPUT_DIR="sing-box/include"
-              
-              chmod +x custom/.github/scripts/generate-registry.sh
-              bash custom/.github/scripts/generate-registry.sh
-              ;;
-          esac
-          
-          echo "Protocol modifications applied."
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25.7'
-          check-latest: false
-          cache-dependency-path: sing-box/go.sum
-
-      - name: Set tag
-        working-directory: sing-box
-        shell: bash
-        run: git tag v${{ matrix.config.version }} -f || true
-
-      - name: Build (Windows)
+      - name: Build Desktop (Windows)
         if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
@@ -650,35 +447,32 @@ jobs:
           $env:GOOS = "windows"
           $env:GOARCH = "${{ matrix.arch }}"
           $TAGS = "${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
-          Write-Host "Building with tags: $TAGS"
           go build -v -trimpath -o dist/sing-box.exe -tags "$TAGS" `
-            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
+            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
             ./cmd/sing-box
 
-      - name: Build (macOS)
+      - name: Build Desktop (macOS)
         if: matrix.os == 'darwin'
         working-directory: sing-box
         run: |
           set -xeuo pipefail
           mkdir -p dist
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }}"
-          echo "Building with tags: $TAGS"
           CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} \
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
             ./cmd/sing-box
 
-      - name: Build (Linux)
+      - name: Build Desktop (Linux)
         if: matrix.os == 'linux'
         working-directory: sing-box
         run: |
           set -xeuo pipefail
           mkdir -p dist
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
-          echo "Building with tags: $TAGS"
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} \
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.config.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
             ./cmd/sing-box
 
       - name: Extract libcronet (Windows)
@@ -697,12 +491,92 @@ jobs:
           CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
           CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target linux/${{ matrix.arch }} -o dist
 
+      - name: Android - Checkout Client
+        if: matrix.type == 'android'
+        working-directory: sing-box
+        run: |-
+          rm -rf clients/android
+          git clone -b dev https://github.com/sjnhnp/sing-box-for-android.git clients/android
+
+      - name: Android - Gradle cache
+        if: matrix.type == 'android'
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle
+          key: gradle-android-slim-${{ hashFiles('sing-box/clients/android/**/*.gradle*') }}
+
+      - name: Android - Update Version Prop
+        if: matrix.type == 'android'
+        working-directory: sing-box
+        run: |
+          VERSION="${{ matrix.version }}"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH_FULL=$(echo "$VERSION" | cut -d. -f3)
+          PATCH=$(echo "$PATCH_FULL" | cut -d- -f1)
+          PRERELEASE_NUM=0
+          if echo "$VERSION" | grep -q "alpha\|beta\|rc"; then
+            PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
+          fi
+          VERSION_CODE=$((MAJOR * 10000000 + MINOR * 100000 + PATCH * 1000 + PRERELEASE_NUM))
+          echo "VERSION_CODE=${VERSION_CODE}" > clients/android/version.properties
+          echo "VERSION_NAME=${VERSION}" >> clients/android/version.properties
+
+      - name: Android - Setup Keystore
+        if: matrix.type == 'android'
+        working-directory: sing-box
+        run: |-
+          cd clients/android
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+          cat > local.properties << EOF
+          KEYSTORE_PASS=${{ secrets.KEYSTORE_PASSWORD }}
+          ALIAS_NAME=${{ secrets.KEY_ALIAS }}
+          ALIAS_PASS=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      - name: Android - Patch Gradle (Arm64 Only)
+        if: matrix.type == 'android'
+        working-directory: sing-box
+        run: |-
+          cd clients/android/app
+          sed -i 's/include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")/include("arm64-v8a")/' build.gradle.kts
+          sed -i 's/isUniversalApk = true/isUniversalApk = false/' build.gradle.kts
+
+      - name: Android - Build APK
+        if: matrix.type == 'android'
+        working-directory: sing-box
+        run: |-
+          mkdir -p clients/android/app/libs
+          cp libbox.aar clients/android/app/libs/
+          cp libbox.aar clients/android/app/libs/libbox-legacy.aar
+          cd clients/android
+          ./gradlew :app:assembleOtherRelease --no-daemon
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+
+      - name: Android - Prepare Artifacts
+        if: matrix.type == 'android'
+        run: |-
+          mkdir -p dist
+          find sing-box/clients/android/app/build/outputs/apk/other/release -name "*.apk" -exec cp {} dist/ \;
+          VERSION_CODE=$(grep VERSION_CODE sing-box/clients/android/version.properties | cut -d= -f2)
+          VERSION_NAME=$(grep VERSION_NAME sing-box/clients/android/version.properties | cut -d= -f2)
+          cat > dist/SFA-version-metadata.json << EOF
+          {
+            "version_code": ${VERSION_CODE},
+            "version_name": "${VERSION_NAME}"
+          }
+          EOF
+          cd dist
+          PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          mv *.apk "sing-box-${{ matrix.version }}-android-arm64-${PROTOCOL_MODE}.apk"
+
       - name: Archive (Windows)
         if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
           $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          $DIR_NAME = "sing-box-${{ matrix.config.version }}-windows-${{ matrix.arch }}-$PROTOCOL_MODE"
+          $DIR_NAME = "sing-box-${{ matrix.version }}-windows-${{ matrix.arch }}-$PROTOCOL_MODE"
           mkdir "dist/$DIR_NAME"
           Copy-Item LICENSE "dist/$DIR_NAME"
           Copy-Item "dist/sing-box.exe" "dist/$DIR_NAME"
@@ -716,7 +590,7 @@ jobs:
         run: |
           set -xeuo pipefail
           PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          DIR_NAME="sing-box-${{ matrix.config.version }}-darwin-${{ matrix.arch }}-${PROTOCOL_MODE}"
+          DIR_NAME="sing-box-${{ matrix.version }}-darwin-${{ matrix.arch }}-${PROTOCOL_MODE}"
           cd dist
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
@@ -729,7 +603,7 @@ jobs:
         run: |
           set -xeuo pipefail
           PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          DIR_NAME="sing-box-${{ matrix.config.version }}-linux-${{ matrix.arch }}-${PROTOCOL_MODE}"
+          DIR_NAME="sing-box-${{ matrix.version }}-linux-${{ matrix.arch }}-${PROTOCOL_MODE}"
           cd dist
           mkdir -p "${DIR_NAME}"
           cp ../LICENSE "${DIR_NAME}"
@@ -740,17 +614,13 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.os }}-${{ matrix.arch }}-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.config.version }}
-          path: sing-box/dist/*.zip
+          name: ${{ matrix.os }}-${{ matrix.arch }}-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.version }}
+          path: |
+            dist/*
+            sing-box/dist/*.zip
+            sing-box/dist/*.tar.gz
           if-no-files-found: ignore
-
-      - name: Upload Artifact (Unix)
-        if: matrix.os != 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.os }}-${{ matrix.arch }}-${{ needs.strategy_matrix.outputs.protocol_mode }}-${{ matrix.config.version }}
-          path: sing-box/dist/*.tar.gz
-          if-no-files-found: ignore
+          retention-days: 1
 
   # ============================================================================
   # CREATE RELEASES
@@ -758,12 +628,11 @@ jobs:
   release:
     name: Release ${{ matrix.config.tag }}
     runs-on: ubuntu-latest
-    needs: [strategy_matrix, build_android, build_desktop]
+    needs: [strategy_matrix, build]
     if: >-
       always() &&
       needs.strategy_matrix.result == 'success' &&
-      (needs.build_android.result == 'success' || needs.build_android.result == 'skipped') &&
-      (needs.build_desktop.result == 'success' || needs.build_desktop.result == 'skipped')
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
