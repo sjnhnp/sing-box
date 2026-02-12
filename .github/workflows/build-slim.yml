@@ -434,7 +434,7 @@ jobs:
           
           VERSION="${{ matrix.version }}"
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_conntrack"
-          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -s -w -buildid="
+          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -s -w -buildid= -checklinkname=0"
           
           echo "Building with tags: $TAGS"
           
