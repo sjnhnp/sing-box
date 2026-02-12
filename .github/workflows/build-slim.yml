@@ -759,7 +759,11 @@ jobs:
     name: Release ${{ matrix.config.tag }}
     runs-on: ubuntu-latest
     needs: [strategy_matrix, build_android, build_desktop]
-    if: always() && needs.strategy_matrix.result == 'success'
+    if: >-
+      always() &&
+      needs.strategy_matrix.result == 'success' &&
+      (needs.build_android.result == 'success' || needs.build_android.result == 'skipped') &&
+      (needs.build_desktop.result == 'success' || needs.build_desktop.result == 'skipped')
     strategy:
       fail-fast: false
       matrix:
