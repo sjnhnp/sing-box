@@ -412,15 +412,18 @@ jobs:
 
       - name: Setup Go
         uses: actions/setup-go@v5
-        with: { go-version: ^1.25.5 }
+        with: { go-version: '1.24.0' }
 
       - name: Setup Android NDK
         id: setup-ndk
         uses: nttld/setup-ndk@v1
-        with: { ndk-version: r27c, local-cache: true }
+        with: { ndk-version: r28, local-cache: true }
 
-      - name: Setup OpenJDK
-        run: sudo apt update && sudo apt install -y openjdk-17-jdk-headless
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
 
       - name: Set tag
         working-directory: sing-box
@@ -442,7 +445,6 @@ jobs:
             -javapkg=io.nekohasekai -libname=libbox -trimpath -buildvcs=false \
             -ldflags "${LDFLAGS}" -tags "${TAGS}" ./experimental/libbox
         env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
           GODEBUG: multipathtcp=0
 
@@ -502,7 +504,6 @@ jobs:
           cd clients/android
           ./gradlew :app:assembleOtherRelease --no-daemon
         env:
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
 
       - name: Prepare Artifacts
