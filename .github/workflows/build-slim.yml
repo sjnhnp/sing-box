@@ -434,7 +434,7 @@ jobs:
           
           VERSION="${{ matrix.version }}"
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_conntrack"
-          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
+          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -s -w -buildid="
           
           echo "Building with tags: $TAGS"
           
@@ -444,6 +444,7 @@ jobs:
         env:
           JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
           ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          GODEBUG: multipathtcp=0
 
       - name: Checkout Android Client
         working-directory: sing-box
