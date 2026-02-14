@@ -364,7 +364,7 @@ func (c *CommandClient) handleStatusStream() {
 			c.handler.Disconnected(err.Error())
 			return
 		}
-		c.handler.WriteStatus(StatusMessageFromGRPC(status))
+		c.handler.WriteStatus(statusMessageFromGRPC(status))
 	}
 }
 
@@ -383,7 +383,7 @@ func (c *CommandClient) handleGroupStream() {
 			c.handler.Disconnected(err.Error())
 			return
 		}
-		c.handler.WriteGroups(OutboundGroupIteratorFromGRPC(groups))
+		c.handler.WriteGroups(outboundGroupIteratorFromGRPC(groups))
 	}
 }
 
@@ -449,7 +449,7 @@ func (c *CommandClient) handleConnectionsStream() {
 			c.handler.Disconnected(err.Error())
 			return
 		}
-		libboxEvents := ConnectionEventsFromGRPC(events)
+		libboxEvents := connectionEventsFromGRPC(events)
 		c.handler.WriteConnectionEvents(libboxEvents)
 	}
 }
@@ -525,7 +525,7 @@ func (c *CommandClient) GetSystemProxyStatus() (*SystemProxyStatus, error) {
 		if err != nil {
 			return nil, err
 		}
-		return SystemProxyStatusFromGRPC(status), nil
+		return systemProxyStatusFromGRPC(status), nil
 	})
 }
 
