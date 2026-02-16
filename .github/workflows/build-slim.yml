@@ -600,7 +600,7 @@ jobs:
           PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
           DIR_NAME="sing-box-${{ matrix.version }}-darwin-${{ matrix.arch }}-${PROTOCOL_MODE}"
           mkdir -p "../dist/${DIR_NAME}"
-          cp ../LICENSE "../dist/${DIR_NAME}"
+          cp LICENSE "../dist/${DIR_NAME}"
           cp dist/sing-box "../dist/${DIR_NAME}"
           cd ../dist
           tar -czvf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
@@ -614,7 +614,7 @@ jobs:
           PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
           DIR_NAME="sing-box-${{ matrix.version }}-linux-${{ matrix.arch }}-${PROTOCOL_MODE}"
           mkdir -p "../dist/${DIR_NAME}"
-          cp ../LICENSE "../dist/${DIR_NAME}"
+          cp LICENSE "../dist/${DIR_NAME}"
           cp dist/sing-box "../dist/${DIR_NAME}"
           [ -f dist/libcronet.so ] && cp dist/libcronet.so "../dist/${DIR_NAME}" || true
           cd ../dist
