@@ -1,4 +1,4 @@
-//go:build windows
+//go:build windows && with_gvisor
 
 package tailscale
 
