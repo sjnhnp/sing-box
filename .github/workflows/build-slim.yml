@@ -522,9 +522,16 @@ jobs:
           MINOR=$(echo "$VERSION" | cut -d. -f2)
           PATCH_FULL=$(echo "$VERSION" | cut -d. -f3)
           PATCH=$(echo "$PATCH_FULL" | cut -d- -f1)
-          PRERELEASE_NUM=0
-          if echo "$VERSION" | grep -q "alpha\|beta\|rc"; then
+          PRERELEASE_NUM=999
+          if echo "$VERSION" | grep -q "alpha"; then
             PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
+            PRERELEASE_NUM=$((PRERELEASE_NUM + 100))
+          elif echo "$VERSION" | grep -q "beta"; then
+            PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
+            PRERELEASE_NUM=$((PRERELEASE_NUM + 400))
+          elif echo "$VERSION" | grep -q "rc"; then
+            PRERELEASE_NUM=$(echo "$VERSION" | grep -oE '[0-9]+$' || echo "0")
+            PRERELEASE_NUM=$((PRERELEASE_NUM + 700))
           fi
           VERSION_CODE=$((MAJOR * 10000000 + MINOR * 100000 + PATCH * 1000 + PRERELEASE_NUM))
           echo "VERSION_CODE=${VERSION_CODE}" > clients/android/version.properties
