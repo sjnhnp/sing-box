@@ -34,9 +34,9 @@ on:
         default: "slim"
         type: choice
         options:
-          - slim      # 精简: VLESS/VMess/Trojan/SS/Hy2/Naive (忽略下方选项)
-          - full      # 完整: 全部协议 (忽略下方选项)
-          - custom    # 自定义: 根据下方勾选决定
+          - slim # 精简: VLESS/VMess/Trojan/SS/Hy2/Naive (忽略下方选项)
+          - full # 完整: 全部协议 (忽略下方选项)
+          - custom # 自定义: 根据下方勾选决定
       # ====== Custom Protocol Options (ONLY used when protocol_mode = 'custom') ======
       proto_vless:
         description: "├─ VLESS (Reality support)"
@@ -123,10 +123,10 @@ jobs:
         id: generate
         run: |
           set -euo pipefail
-          
+
           # Initialize versions list
           VERSIONS_JSON="[]"
-          
+
           add_version() {
             local v=$1
             local t=$2
@@ -159,40 +159,40 @@ jobs:
                 fi
              fi
           fi
-          
+
           # Generate unified build matrix
           BUILD_MATRIX="[]"
           PLATFORM="${{ inputs.platform }}"
-          
+
           # Android
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "android" ]]; then
             ANDROID_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] | {type: "android", platform: "Android", arch: "arm64", runner: "ubuntu-latest", os: "android", version: .version, tag: .tag, prerelease: .prerelease}]')
             BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$ANDROID_PART" '. + $p')
           fi
-          
+
           # Windows
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "windows" ]]; then
             WINDOWS_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {type: "desktop", platform: "Windows", arch: $arch, runner: "windows-latest", os: "windows", version: $v.version, tag: $v.tag, prerelease: $v.prerelease}]')
             BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$WINDOWS_PART" '. + $p')
           fi
-          
+
           # macOS
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "macos" ]]; then
             MACOS_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {type: "desktop", platform: "macOS", arch: $arch, runner: "macos-latest", os: "darwin", version: $v.version, tag: $v.tag, prerelease: $v.prerelease}]')
             BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$MACOS_PART" '. + $p')
           fi
-          
+
           # Linux
           if [[ "$PLATFORM" == "all" || "$PLATFORM" == "linux" ]]; then
             LINUX_PART=$(echo "$VERSIONS_JSON" | jq -c '[.[] as $v | ["amd64", "arm64"] | .[] as $arch | {type: "desktop", platform: "Linux", arch: $arch, runner: "ubuntu-latest", os: "linux", version: $v.version, tag: $v.tag, prerelease: $v.prerelease}]')
             BUILD_MATRIX=$(echo "$BUILD_MATRIX" | jq -c --argjson p "$LINUX_PART" '. + $p')
           fi
-          
+
           HAS_BUILDS="false"
           if [[ "$BUILD_MATRIX" != "[]" ]]; then
             HAS_BUILDS="true"
           fi
-          
+
           {
             echo "build_matrix<<EOF"
             echo "$BUILD_MATRIX"
@@ -207,10 +207,10 @@ jobs:
         id: protocols
         run: |
           set -euo pipefail
-          
+
           PROTOCOL_MODE="${{ inputs.protocol_mode }}"
           echo "Protocol Mode: $PROTOCOL_MODE"
-          
+
           # Define protocol states based on mode
           case "$PROTOCOL_MODE" in
             slim)
@@ -265,7 +265,7 @@ jobs:
               PROTO_TOR=${{ inputs.proto_tor }}
               ;;
           esac
-          
+
           # Generate protocol list for release notes
           PROTOCOLS="Direct, Block, DNS, Socks, HTTP, Mixed, Selector, URLTest"
           [[ "$PROTO_VLESS" == "true" ]] && PROTOCOLS="$PROTOCOLS, VLESS"
@@ -282,18 +282,18 @@ jobs:
           [[ "$PROTO_TAILSCALE" == "true" ]] && PROTOCOLS="$PROTOCOLS, Tailscale"
           [[ "$PROTO_SSH" == "true" ]] && PROTOCOLS="$PROTOCOLS, SSH"
           [[ "$PROTO_TOR" == "true" ]] && PROTOCOLS="$PROTOCOLS, Tor"
-          
+
           echo "Included protocols: $PROTOCOLS"
-          
+
           # Generate build tags
           BUILD_TAGS="with_gvisor,with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0"
           [[ "$PROTO_NAIVE" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_naive_outbound"
           [[ "$PROTO_WIREGUARD" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_wireguard"
           [[ "$PROTO_TAILSCALE" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_tailscale"
           [[ "$PROTO_TOR" == "true" ]] && BUILD_TAGS="$BUILD_TAGS,with_embedded_tor"
-          
+
           echo "Build tags: $BUILD_TAGS"
-          
+
           # Generate environment variables JSON for build jobs
           PROTO_ENV=$(cat <<EOF
           {
@@ -314,7 +314,7 @@ jobs:
           }
           EOF
           )
-          
+
           {
             echo "protocol_mode=$PROTOCOL_MODE"
             echo "protocols_list=$PROTOCOLS"
@@ -408,7 +408,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.7'
+          go-version: "1.25.7"
           check-latest: false
           cache-dependency-path: sing-box/go.sum
 
@@ -487,7 +487,7 @@ jobs:
         if: matrix.os == 'windows'
         working-directory: sing-box
         run: |
-          $CRONET_GO_VERSION = Get-Content .github/CRONET_GO_VERSION
+          $CRONET_GO_VERSION = Get-Content ../custom/.github/CRONET_GO_VERSION
           $env:CGO_ENABLED = "0"
           go run -v "github.com/sagernet/cronet-go/cmd/build-naive@$CRONET_GO_VERSION" extract-lib --target windows/${{ matrix.arch }} -o dist
 
@@ -496,7 +496,7 @@ jobs:
         working-directory: sing-box
         run: |
           set -xeuo pipefail
-          CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
+          CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
           CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target linux/${{ matrix.arch }} -o dist
 
       - name: Android - Checkout Client
@@ -677,11 +677,11 @@ jobs:
             ## sing-box Build - Multi-Platform Release
 
             **Based on upstream sing-box ${{ matrix.config.tag }}**
-            
+
             **Protocol Mode: `${{ needs.strategy_matrix.outputs.protocol_mode }}`**
-            
+
             ### 📦 Downloads
-            
+
             | Platform | File |
             |----------|------|
             | Android (arm64) | `sing-box-${{ matrix.config.version }}-android-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.apk` |
@@ -693,15 +693,15 @@ jobs:
             | Linux (arm64) | `sing-box-${{ matrix.config.version }}-linux-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
 
             ### ✅ Included Protocols
-            
+
             ${{ needs.strategy_matrix.outputs.protocols_list }}
-            
+
             **NaïveProxy support** (if enabled):
             - Windows: includes `libcronet.dll`
             - Linux: includes `libcronet.so` (place in same directory as binary)
             - macOS: CGO-built, no external library needed
             - Android: included
-            
+
             ### 📋 Build Tags
             ```
             ${{ needs.strategy_matrix.outputs.build_tags }}
