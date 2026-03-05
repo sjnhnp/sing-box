@@ -9,11 +9,9 @@ import (
 	"time"
 
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/common/conntrack"
 	"github.com/sagernet/sing-box/common/process"
 	"github.com/sagernet/sing-box/common/sniff"
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/option"
 	R "github.com/sagernet/sing-box/route/rule"
 	"github.com/sagernet/sing-mux"
 	"github.com/sagernet/sing-tun"
@@ -80,7 +78,6 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		injectable.NewConnectionEx(ctx, conn, metadata, onClose)
 		return nil
 	}
-	conntrack.KillerCheck()
 	metadata.Network = N.NetworkTCP
 	switch metadata.Destination.Fqdn {
 	case mux.Destination.Fqdn:
@@ -216,8 +213,6 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		injectable.NewPacketConnectionEx(ctx, conn, metadata, onClose)
 		return nil
 	}
-	conntrack.KillerCheck()
-
 	// TODO: move to UoT
 	metadata.Network = N.NetworkUDP
 
@@ -444,6 +439,23 @@ func (r *Router) matchRule(
 			metadata.ProcessInfo = processInfo
 		}
 	}
+	if r.neighborResolver != nil && metadata.SourceMACAddress == nil && metadata.Source.Addr.IsValid() {
+		mac, macFound := r.neighborResolver.LookupMAC(metadata.Source.Addr)
+		if macFound {
+			metadata.SourceMACAddress = mac
+		}
+		hostname, hostnameFound := r.neighborResolver.LookupHostname(metadata.Source.Addr)
+		if hostnameFound {
+			metadata.SourceHostname = hostname
+			if macFound {
+				r.logger.InfoContext(ctx, "found neighbor: ", mac, ", hostname: ", hostname)
+			} else {
+				r.logger.InfoContext(ctx, "found neighbor hostname: ", hostname)
+			}
+		} else if macFound {
+			r.logger.InfoContext(ctx, "found neighbor: ", mac)
+		}
+	}
 	if metadata.Destination.Addr.IsValid() && r.dnsTransport.FakeIP() != nil && r.dnsTransport.FakeIP().Store().Contains(metadata.Destination.Addr) {
 		domain, loaded := r.dnsTransport.FakeIP().Store().Lookup(metadata.Destination.Addr)
 		if !loaded {
@@ -470,37 +482,6 @@ func (r *Router) matchRule(
 		metadata.IPVersion = 4
 	} else if metadata.Destination.IsIPv6() {
 		metadata.IPVersion = 6
-	}
-
-	//nolint:staticcheck
-	if metadata.InboundOptions != common.DefaultValue[option.InboundOptions]() {
-		if !preMatch && metadata.InboundOptions.SniffEnabled {
-			newBuffer, newPackerBuffers, newErr := r.actionSniff(ctx, metadata, &R.RuleActionSniff{
-				OverrideDestination: metadata.InboundOptions.SniffOverrideDestination,
-				Timeout:             time.Duration(metadata.InboundOptions.SniffTimeout),
-			}, inputConn, inputPacketConn, nil, nil)
-			if newBuffer != nil {
-				buffers = []*buf.Buffer{newBuffer}
-			} else if len(newPackerBuffers) > 0 {
-				packetBuffers = newPackerBuffers
-			}
-			if newErr != nil {
-				fatalErr = newErr
-				return
-			}
-		}
-		if C.DomainStrategy(metadata.InboundOptions.DomainStrategy) != C.DomainStrategyAsIS {
-			fatalErr = r.actionResolve(ctx, metadata, &R.RuleActionResolve{
-				Strategy: C.DomainStrategy(metadata.InboundOptions.DomainStrategy),
-			})
-			if fatalErr != nil {
-				return
-			}
-		}
-		if metadata.InboundOptions.UDPDisableDomainUnmapping {
-			metadata.UDPDisableDomainUnmapping = true
-		}
-		metadata.InboundOptions = option.InboundOptions{}
 	}
 
 match:
