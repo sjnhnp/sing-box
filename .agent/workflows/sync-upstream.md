@@ -5,6 +5,7 @@ description: Sync with upstream sing-box while intelligently preserving custom s
 # Smart Sync Upstream Workflow
 
 此 workflow 用于同步上游 SagerNet/sing-box 的最新代码，采用**智能合并策略**：
+
 1. **保留上游变更**：默认接受上游的所有新代码（包括新协议、Bug修复）。
 2. **智能精简**：使用脚本自动再次移除（注释掉）你不需要的协议。
 3. **保留配置**：CI 配置文件和文档直接保留你的版本。
@@ -14,6 +15,7 @@ description: Sync with upstream sing-box while intelligently preserving custom s
 ### 1. 备份关键文件 (作为安全网)
 
 // turbo
+
 ```bash
 $backupDir = Join-Path $env:TEMP "sing-box-backup"
 if (Test-Path $backupDir) { Remove-Item -Recurse -Force $backupDir }
@@ -34,10 +36,11 @@ Write-Host "✅ Backup created at $backupDir"
 使用 `-X theirs` 策略合并，这意味着如果发生冲突，我们将**优先使用上游的最新代码**。这会自动把我们在 `registry.go` 等文件中注释掉的代码恢复（取消注释）。别担心，下一步我们会再次把它们“修剪”掉。
 
 // turbo
+
 ```bash
 git remote add upstream https://github.com/SagerNet/sing-box.git 2>$null
 git fetch upstream --tags
-git merge upstream/dev-next -X theirs -m "Merge upstream dev-next (Smart Sync)"
+git merge upstream/testing -X theirs -m "Merge upstream testing (Smart Sync)"
 ```
 
 ### 3. 恢复 CI 配置和文档
@@ -45,6 +48,7 @@ git merge upstream/dev-next -X theirs -m "Merge upstream dev-next (Smart Sync)"
 对于 `.github` 目录和 `README.md`，我们完全不关心上游的变化，直接强制恢复我们的版本。
 
 // turbo
+
 ```bash
 $backupDir = Join-Path $env:TEMP "sing-box-backup"
 Copy-Item "$backupDir\.github\workflows\build-slim.yml" -Destination ".github\workflows\build-slim.yml" -Force
@@ -59,6 +63,7 @@ Copy-Item "$backupDir\quic_stub.go" -Destination "include\quic_stub.go" -Force
 此脚本会扫描代码文件，将不需要的协议再次注释掉。这样既保留了上游的新功能，又维持了你的精简配置。
 
 // turbo
+
 ```powershell
 function Slim-Down-File {
     param ($Path, $Imports, $Registers)
@@ -75,7 +80,7 @@ function Slim-Down-File {
         
         # 使用 RegexReplace 可能会破坏格式，这里我们用简单的行处理或者精细正则
         # 为了稳健，我们用正则替换整行
-        $content = $content -replace $pattern, ('	' + $replacement)
+        $content = $content -replace $pattern, (' ' + $replacement)
     }
 
     # 2. Comment out Registers
@@ -83,7 +88,7 @@ function Slim-Down-File {
         # Regex: 匹配 "package.Register...(registry)"
         $pattern = '(?m)^(?!\s*// Removed:)\s*' + [regex]::Escape($reg) + '\('
         $replacement = '// Removed: ' + $reg + '('
-        $content = $content -replace $pattern, ('	' + $replacement)
+        $content = $content -replace $pattern, (' ' + $replacement)
     }
 
     Set-Content -Path $Path -Value $content -NoNewline
@@ -125,6 +130,7 @@ Write-Host "✅ Smart slim-down complete."
 ### 5. 检查差异并提交
 
 // turbo
+
 ```bash
 echo "=== 自动处理后的差异 ==="
 git diff
@@ -139,5 +145,5 @@ git add include/registry.go include/quic.go include/quic_stub.go
 git add .github/workflows/build-slim.yml .github/workflows/sync-upstream-preserve.yml
 git add README.md
 git commit -m "Merge upstream & Apply smart slim-down"
-git push origin dev-next
+git push origin testing
 ```
