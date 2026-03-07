@@ -1,4 +1,4 @@
-//go:build !android && with_gvisor
+//go:build with_gvisor && !android
 
 package tailscale
 
