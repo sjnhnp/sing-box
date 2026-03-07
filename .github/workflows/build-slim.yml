@@ -359,12 +359,28 @@ jobs:
               cp custom/include/registry.go sing-box/include/registry.go
               cp custom/include/quic.go sing-box/include/quic.go
               cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+              echo "Syncing necessary Go packages from custom..."
+              for dir in experimental/libbox route adapter constant common; do
+                if [ -d "custom/$dir" ]; then
+                  mkdir -p "sing-box/$dir"
+                  cp -r "custom/$dir"/* "sing-box/$dir/"
+                fi
+              done
+              cd sing-box && go mod tidy && cd ..
               ;;
             full)
               echo "Using upstream registry files (full mode)..."
               ;;
             custom)
               echo "Generating custom registry files..."
+              echo "Syncing necessary Go packages from custom..."
+              for dir in experimental/libbox route adapter constant common; do
+                if [ -d "custom/$dir" ]; then
+                  mkdir -p "sing-box/$dir"
+                  cp -r "custom/$dir"/* "sing-box/$dir/"
+                fi
+              done
+              cd sing-box && go mod tidy && cd ..
               PROTO_ENV='${{ needs.strategy_matrix.outputs.proto_env }}'
               export PROTO_VLESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VLESS')
               export PROTO_VMESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VMESS')
@@ -396,12 +412,32 @@ jobs:
               Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
               Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
               Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+              $dirs = @("experimental/libbox", "route", "adapter", "constant", "common")
+              foreach ($dir in $dirs) {
+                if (Test-Path "custom/$dir") {
+                  New-Item -ItemType Directory -Force -Path "sing-box/$dir"
+                  Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
+                }
+              }
+              Set-Location sing-box
+              go mod tidy
+              Set-Location ..
             }
             "full" {}
             "custom" {
               Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
               Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
               Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+              $dirs = @("experimental/libbox", "route", "adapter", "constant", "common")
+              foreach ($dir in $dirs) {
+                if (Test-Path "custom/$dir") {
+                  New-Item -ItemType Directory -Force -Path "sing-box/$dir"
+                  Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
+                }
+              }
+              Set-Location sing-box
+              go mod tidy
+              Set-Location ..
             }
           }
 
