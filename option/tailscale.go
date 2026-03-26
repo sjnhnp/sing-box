@@ -36,6 +36,10 @@ type TailscaleDNSServerOptions struct {
 	AcceptDefaultResolvers bool   `json:"accept_default_resolvers,omitempty"`
 }
 
+type TailscaleCertificateProviderOptions struct {
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
 type DERPServiceOptions struct {
 	ListenOptions
 	InboundTLSOptionsContainer
@@ -61,7 +65,7 @@ func (d DERPVerifyClientURLOptions) ServerIsDomain() bool {
 	if err != nil {
 		return false
 	}
-	return M.IsDomainName(verifyURL.Host)
+	return M.ParseSocksaddr(verifyURL.Hostname()).IsDomain()
 }
 
 func (d DERPVerifyClientURLOptions) MarshalJSON() ([]byte, error) {
