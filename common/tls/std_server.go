@@ -13,7 +13,6 @@ import (
 	"github.com/sagernet/fswatch"
 	"github.com/sagernet/sing-box/adapter"
 	C "github.com/sagernet/sing-box/constant"
-	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing/common"
@@ -333,7 +332,6 @@ func NewSTDServer(ctx context.Context, logger log.ContextLogger, options option.
 			return nil, errInsecureUnused
 		}
 	} else if options.ACME != nil && len(options.ACME.Domain) > 0 { //nolint:staticcheck
-		deprecated.Report(ctx, deprecated.OptionInlineACME)
 		//nolint:staticcheck
 		tlsConfig, acmeService, err = startACME(ctx, logger, common.PtrValueOrDefault(options.ACME))
 		if err != nil {
