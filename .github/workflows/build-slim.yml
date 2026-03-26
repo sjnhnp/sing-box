@@ -13,6 +13,7 @@ on:
         default: "beta"
         type: choice
         options:
+          - alpha
           - beta
           - stable
           - all
@@ -143,9 +144,27 @@ jobs:
           else
              echo "Fetching releases from SagerNet/sing-box..."
              RELEASES_JSON=$(curl -s "https://api.github.com/repos/SagerNet/sing-box/releases")
-             LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.prerelease == true)] | .[0] | .tag_name')
-             LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.prerelease == false)] | .[0] | .tag_name')
+             
+             # Find latest alpha (tag contains -alpha)
+             LATEST_ALPHA=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.tag_name | test("-alpha"))] | .[0] | .tag_name // empty')
+             
+             # Find latest beta (tag contains -beta but not -alpha)
+             LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.tag_name | test("-beta")) and (.tag_name | test("-alpha") | not)] | .[0] | .tag_name // empty')
+             
+             # Find latest stable (no prerelease suffix)
+             LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '[.[] | select(.tag_name | test("-alpha|-beta|-rc") | not)] | .[0] | .tag_name // empty')
+             
+             echo "Latest Alpha: $LATEST_ALPHA"
+             echo "Latest Beta: $LATEST_BETA"
+             echo "Latest Stable: $LATEST_STABLE"
+             
              MODE="${{ inputs.mode }}"
+             if [[ "$MODE" == "alpha" || "$MODE" == "all" ]]; then
+                if [ -n "$LATEST_ALPHA" ] && [ "$LATEST_ALPHA" != "null" ]; then
+                  VER=$(echo "$LATEST_ALPHA" | sed 's/^v//')
+                  add_version "$VER" "$LATEST_ALPHA" true
+                fi
+             fi
              if [[ "$MODE" == "beta" || "$MODE" == "all" ]]; then
                 if [ -n "$LATEST_BETA" ] && [ "$LATEST_BETA" != "null" ]; then
                   VER=$(echo "$LATEST_BETA" | sed 's/^v//')
