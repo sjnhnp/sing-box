@@ -339,7 +339,7 @@ func (o DNSServerAddressOptions) Build() M.Socksaddr {
 }
 
 func (o DNSServerAddressOptions) ServerIsDomain() bool {
-	return o.Build().IsDomain()
+	return o.Build().Fqdn != ""
 }
 
 func (o *DNSServerAddressOptions) TakeServerOptions() ServerOptions {

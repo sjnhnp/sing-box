@@ -136,7 +136,7 @@ func (c *ClientPacketConn) ReadFrom(p []byte) (n int, addr net.Addr, err error) 
 		return
 	}
 	n = buffer.Len()
-	if destination.IsDomain() {
+	if destination.Fqdn != "" {
 		addr = destination
 	} else {
 		addr = destination.UDPAddr()
