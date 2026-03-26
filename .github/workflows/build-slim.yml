@@ -348,6 +348,13 @@ jobs:
           submodules: ${{ matrix.type == 'android' && 'recursive' || 'false' }}
           path: sing-box
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.7"
+          check-latest: false
+          cache-dependency-path: sing-box/go.sum
+
       - name: Apply protocol modifications (Unix)
         if: matrix.os != 'windows'
         run: |
@@ -468,13 +475,6 @@ jobs:
               Set-Location ..
             }
           }
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.25.7"
-          check-latest: false
-          cache-dependency-path: sing-box/go.sum
 
       - name: Setup Android NDK
         if: matrix.type == 'android'
