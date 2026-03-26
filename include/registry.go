@@ -5,7 +5,6 @@ import (
 
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"
-	"github.com/sagernet/sing-box/adapter/certificate"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -18,7 +17,6 @@ import (
 	"github.com/sagernet/sing-box/dns/transport/local"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
-	// Removed: anytls - not used
 	"github.com/sagernet/sing-box/protocol/block"
 	"github.com/sagernet/sing-box/protocol/direct"
 	"github.com/sagernet/sing-box/protocol/group"
@@ -27,15 +25,11 @@ import (
 	"github.com/sagernet/sing-box/protocol/naive"
 	"github.com/sagernet/sing-box/protocol/redirect"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
-	// Removed: shadowtls - not used
 	"github.com/sagernet/sing-box/protocol/socks"
-	// Removed: ssh - not used
-	// Removed: tor - not used
 	"github.com/sagernet/sing-box/protocol/trojan"
 	"github.com/sagernet/sing-box/protocol/tun"
 	"github.com/sagernet/sing-box/protocol/vless"
 	"github.com/sagernet/sing-box/protocol/vmess"
-	originca "github.com/sagernet/sing-box/service/origin_ca"
 	"github.com/sagernet/sing-box/service/resolved"
 	"github.com/sagernet/sing-box/service/ssmapi"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -137,16 +131,6 @@ func ServiceRegistry() *service.Registry {
 	registerCCMService(registry)
 	registerOCMService(registry)
 	registerOOMKillerService(registry)
-
-	return registry
-}
-
-func CertificateProviderRegistry() *certificate.Registry {
-	registry := certificate.NewRegistry()
-
-	registerACMECertificateProvider(registry)
-	registerTailscaleCertificateProvider(registry)
-	originca.RegisterCertificateProvider(registry)
 
 	return registry
 }

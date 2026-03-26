@@ -50,13 +50,6 @@ import (
 	"github.com/sagernet/sing-box/option"
 HEADER
 
-    # Detect if certificate provider registry is supported (version >= 1.14.0)
-    HAS_CERTIFICATE_PROVIDER=false
-    if [ -d "adapter/certificate" ] || [ -d "../adapter/certificate" ] || [ -d "sing-box/adapter/certificate" ]; then
-        HAS_CERTIFICATE_PROVIDER=true
-    fi
-
-    # Add protocol imports
     [[ "$PROTO_ANYTLS" == "true" ]] && echo '	"github.com/sagernet/sing-box/protocol/anytls"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/protocol/block"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/protocol/direct"' >> "${OUTPUT_DIR}/registry.go"
@@ -77,40 +70,16 @@ HEADER
     [[ "$PROTO_VMESS" == "true" ]] && echo '	"github.com/sagernet/sing-box/protocol/vmess"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/service/resolved"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/service/ssmapi"' >> "${OUTPUT_DIR}/registry.go"
-    if [[ "$HAS_CERTIFICATE_PROVIDER" == "true" ]]; then
-        echo '	"github.com/sagernet/sing-box/adapter/certificate"' >> "${OUTPUT_DIR}/registry.go"
-        echo '	originca "github.com/sagernet/sing-box/service/origin_ca"' >> "${OUTPUT_DIR}/registry.go"
-    fi
     echo '	E "github.com/sagernet/sing/common/exceptions"' >> "${OUTPUT_DIR}/registry.go"
     echo ')' >> "${OUTPUT_DIR}/registry.go"
     echo '' >> "${OUTPUT_DIR}/registry.go"
 
-    # Context function
-    if [[ "$HAS_CERTIFICATE_PROVIDER" == "true" ]]; then
-        cat >> "${OUTPUT_DIR}/registry.go" << 'CONTEXT'
-func Context(ctx context.Context) context.Context {
-	return box.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
-}
-
-func CertificateProviderRegistry() *certificate.Registry {
-	registry := certificate.NewRegistry()
-
-	registerACMECertificateProvider(registry)
-	registerTailscaleCertificateProvider(registry)
-	originca.RegisterCertificateProvider(registry)
-
-	return registry
-}
-
-CONTEXT
-    else
-        cat >> "${OUTPUT_DIR}/registry.go" << 'CONTEXT'
+    cat >> "${OUTPUT_DIR}/registry.go" << 'CONTEXT'
 func Context(ctx context.Context) context.Context {
 	return box.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), DNSTransportRegistry(), ServiceRegistry())
 }
 
 CONTEXT
-    fi
 
     # InboundRegistry function
     cat >> "${OUTPUT_DIR}/registry.go" << 'INBOUND_START'
