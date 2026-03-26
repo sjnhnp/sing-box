@@ -355,10 +355,21 @@ jobs:
           echo "Protocol mode: $PROTOCOL_MODE"
           case "$PROTOCOL_MODE" in
             slim)
-              echo "Using pre-configured slim registry files..."
-              cp custom/include/registry.go sing-box/include/registry.go
-              cp custom/include/quic.go sing-box/include/quic.go
-              cp custom/include/quic_stub.go sing-box/include/quic_stub.go
+              echo "Generating slim registry files..."
+              export PROTO_VLESS=true
+              export PROTO_VMESS=true
+              export PROTO_TROJAN=true
+              export PROTO_SHADOWSOCKS=true
+              export PROTO_HYSTERIA2=true
+              export PROTO_NAIVE=true
+              export PROTO_HYSTERIA=false
+              export PROTO_TUIC=false
+              export PROTO_SHADOWTLS=false
+              export PROTO_ANYTLS=false
+              export PROTO_WIREGUARD=false
+              export PROTO_TAILSCALE=false
+              export PROTO_SSH=false
+              export PROTO_TOR=false
               echo "Syncing necessary Go packages from custom..."
               for dir in include experimental/libbox route option adapter constant common protocol service transport dns log; do
                 if [ -d "custom/$dir" ]; then
@@ -366,6 +377,9 @@ jobs:
                   cp -r "custom/$dir"/* "sing-box/$dir/"
                 fi
               done
+              export OUTPUT_DIR="sing-box/include"
+              chmod +x custom/.github/scripts/generate-registry.sh
+              bash custom/.github/scripts/generate-registry.sh
               cd sing-box && go mod tidy && cd ..
               ;;
             full)
@@ -409,9 +423,21 @@ jobs:
           $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
           switch ($PROTOCOL_MODE) {
             "slim" {
-              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
-              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
-              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
+              echo "Generating slim registry files..."
+              $env:PROTO_VLESS="true"
+              $env:PROTO_VMESS="true"
+              $env:PROTO_TROJAN="true"
+              $env:PROTO_SHADOWSOCKS="true"
+              $env:PROTO_HYSTERIA2="true"
+              $env:PROTO_NAIVE="true"
+              $env:PROTO_HYSTERIA="false"
+              $env:PROTO_TUIC="false"
+              $env:PROTO_SHADOWTLS="false"
+              $env:PROTO_ANYTLS="false"
+              $env:PROTO_WIREGUARD="false"
+              $env:PROTO_TAILSCALE="false"
+              $env:PROTO_SSH="false"
+              $env:PROTO_TOR="false"
               $dirs = @("include", "experimental/libbox", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
@@ -419,6 +445,8 @@ jobs:
                   Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
                 }
               }
+              $env:OUTPUT_DIR="sing-box/include"
+              bash custom/.github/scripts/generate-registry.sh
               Set-Location sing-box
               go mod tidy
               Set-Location ..
