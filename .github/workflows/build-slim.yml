@@ -360,7 +360,7 @@ jobs:
               cp custom/include/quic.go sing-box/include/quic.go
               cp custom/include/quic_stub.go sing-box/include/quic_stub.go
               echo "Syncing necessary Go packages from custom..."
-              for dir in experimental/libbox route option adapter constant common; do
+              for dir in include experimental/libbox route option adapter constant common protocol service transport dns log; do
                 if [ -d "custom/$dir" ]; then
                   mkdir -p "sing-box/$dir"
                   cp -r "custom/$dir"/* "sing-box/$dir/"
@@ -374,7 +374,7 @@ jobs:
             custom)
               echo "Generating custom registry files..."
               echo "Syncing necessary Go packages from custom..."
-              for dir in experimental/libbox route option adapter constant common; do
+              for dir in include experimental/libbox route option adapter constant common protocol service transport dns log; do
                 if [ -d "custom/$dir" ]; then
                   mkdir -p "sing-box/$dir"
                   cp -r "custom/$dir"/* "sing-box/$dir/"
@@ -412,7 +412,7 @@ jobs:
               Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
               Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
               Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-              $dirs = @("experimental/libbox", "route", "option", "adapter", "constant", "common")
+              $dirs = @("include", "experimental/libbox", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
                   New-Item -ItemType Directory -Force -Path "sing-box/$dir"
@@ -428,7 +428,7 @@ jobs:
               Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
               Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
               Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-              $dirs = @("experimental/libbox", "route", "option", "adapter", "constant", "common")
+              $dirs = @("include", "experimental/libbox", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
                   New-Item -ItemType Directory -Force -Path "sing-box/$dir"
@@ -474,7 +474,7 @@ jobs:
           export PATH="$PATH:$(go env GOPATH)/bin"
           VERSION="${{ matrix.version }}"
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_conntrack"
-          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -s -w -buildid= -checklinkname=0"
+          LDFLAGS="-X github.com/sagernet/sing-box/constant.Version=${VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -s -w -buildid= -checklinkname=0"
           gomobile bind -v -o libbox.aar -target android/arm64 -androidapi 23 \
             -javapkg=io.nekohasekai -libname=libbox -trimpath -buildvcs=false \
             -ldflags "${LDFLAGS}" -tags "${TAGS}" ./experimental/libbox

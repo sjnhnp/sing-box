@@ -1,4 +1,4 @@
-//go:build go1.25 && badlinkname
+//go:build go1.25 && badlinkname && with_utls
 
 package badtls
 
@@ -8,15 +8,15 @@ import (
 
 	N "github.com/sagernet/sing/common/network"
 
-	"github.com/metacubex/utls"
+	utls "github.com/metacubex/utls"
 )
 
 func init() {
 	methodRegistry = append(methodRegistry, func(conn net.Conn) (unsafe.Pointer, *Methods, bool) {
 		var pointer unsafe.Pointer
-		if uConn, loaded := N.CastReader[*tls.Conn](conn); loaded {
+		if uConn, loaded := N.CastReader[*utls.Conn](conn); loaded {
 			pointer = unsafe.Pointer(uConn)
-		} else if uConn, loaded := N.CastReader[*tls.UConn](conn); loaded {
+		} else if uConn, loaded := N.CastReader[*utls.UConn](conn); loaded {
 			pointer = unsafe.Pointer(uConn.Conn)
 		} else {
 			return nil, nil, false
