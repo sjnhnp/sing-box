@@ -155,13 +155,13 @@ jobs:
              fi
 
              # Find latest alpha (tag contains -alpha)
-             LATEST_ALPHA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type == "object" and (.tag_name? | type == "string" and contains("-alpha"))) | .tag_name' | head -n 1 || echo "")
+             LATEST_ALPHA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type=="object") | .tag_name | select(type=="string" and contains("-alpha"))' | head -n 1 || echo "")
              
              # Find latest beta (tag contains -beta but not -alpha)
-             LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type == "object" and (.tag_name? | type == "string" and contains("-beta") and (contains("-alpha") | not))) | .tag_name' | head -n 1 || echo "")
+             LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type=="object") | .tag_name | select(type=="string" and contains("-beta") and (contains("-alpha") | not))' | head -n 1 || echo "")
              
              # Find latest stable (no prerelease suffix)
-             LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type == "object" and (.tag_name? | type == "string" and (test("-alpha|-beta|-rc") | not))) | .tag_name' | head -n 1 || echo "")
+             LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type=="object") | .tag_name | select(type=="string" and (test("-alpha|-beta|-rc") | not))' | head -n 1 || echo "")
              
              echo "Latest Alpha: $LATEST_ALPHA"
              echo "Latest Beta: $LATEST_BETA"
