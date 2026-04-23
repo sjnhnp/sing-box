@@ -365,7 +365,9 @@ jobs:
     steps:
       - name: Checkout custom
         uses: actions/checkout@v4
-        with: { path: custom }
+        with:
+          path: custom
+          ref: ${{ github.ref }}
 
       - name: Checkout upstream
         uses: actions/checkout@v4
