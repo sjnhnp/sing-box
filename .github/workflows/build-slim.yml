@@ -406,8 +406,9 @@ jobs:
               export PROTO_SSH=false
               export PROTO_TOR=false
               echo "Syncing necessary Go packages from custom..."
-              for dir in include experimental/libbox route option adapter constant common protocol service transport dns log; do
+              for dir in include experimental route option adapter constant common protocol service transport dns log; do
                 if [ -d "custom/$dir" ]; then
+                  rm -rf "sing-box/$dir"
                   mkdir -p "sing-box/$dir"
                   cp -r "custom/$dir"/* "sing-box/$dir/"
                 fi
@@ -425,8 +426,9 @@ jobs:
             custom)
               echo "Generating custom registry files..."
               echo "Syncing necessary Go packages from custom..."
-              for dir in include experimental/libbox route option adapter constant common protocol service transport dns log; do
+              for dir in include experimental route option adapter constant common protocol service transport dns log; do
                 if [ -d "custom/$dir" ]; then
+                  rm -rf "sing-box/$dir"
                   mkdir -p "sing-box/$dir"
                   cp -r "custom/$dir"/* "sing-box/$dir/"
                 fi
@@ -477,9 +479,10 @@ jobs:
               $env:PROTO_TAILSCALE="false"
               $env:PROTO_SSH="false"
               $env:PROTO_TOR="false"
-              $dirs = @("include", "experimental/libbox", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
+              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
+                  if (Test-Path "sing-box/$dir") { Remove-Item -Recurse -Force "sing-box/$dir" }
                   New-Item -ItemType Directory -Force -Path "sing-box/$dir"
                   Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
                 }
@@ -497,9 +500,10 @@ jobs:
               Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
               Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
               Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-              $dirs = @("include", "experimental/libbox", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
+              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
+                  if (Test-Path "sing-box/$dir") { Remove-Item -Recurse -Force "sing-box/$dir" }
                   New-Item -ItemType Directory -Force -Path "sing-box/$dir"
                   Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
                 }
