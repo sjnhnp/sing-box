@@ -14,6 +14,7 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	"github.com/sagernet/sing-box/protocol/tuic"
+	qtls "github.com/sagernet/sing-quic"
 	"github.com/sagernet/sing-quic/hysteria"
 	"github.com/sagernet/sing-quic/hysteria2"
 	"github.com/sagernet/sing/common"
@@ -73,12 +74,23 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		ServerAddress:      options.ServerOptions.Build(),
 		ServerPorts:        options.ServerPorts,
 		HopInterval:        time.Duration(options.HopInterval),
+		HopIntervalMax:     time.Duration(options.HopIntervalMax),
 		SendBPS:            uint64(options.UpMbps * hysteria.MbpsToBps),
 		ReceiveBPS:         uint64(options.DownMbps * hysteria.MbpsToBps),
 		SalamanderPassword: salamanderPassword,
 		Password:           options.Password,
 		TLSConfig:          tlsConfig,
-		UDPDisabled:        !common.Contains(networkList, N.NetworkUDP),
+		QUICOptions: qtls.QUICOptions{
+			IdleTimeout:             options.IdleTimeout.Build(),
+			KeepAlivePeriod:         options.KeepAlivePeriod.Build(),
+			StreamReceiveWindow:     options.StreamReceiveWindow.Value(),
+			ConnectionReceiveWindow: options.ConnectionReceiveWindow.Value(),
+			MaxConcurrentStreams:    options.MaxConcurrentStreams,
+			InitialPacketSize:       options.InitialPacketSize,
+			DisablePathMTUDiscovery: options.DisablePathMTUDiscovery,
+		},
+		UDPDisabled: !common.Contains(networkList, N.NetworkUDP),
+		BBRProfile:  options.BBRProfile,
 	})
 	if err != nil {
 		return nil, err

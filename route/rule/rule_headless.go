@@ -45,6 +45,11 @@ func NewDefaultHeadlessRule(ctx context.Context, options option.DefaultHeadlessR
 			invert: options.Invert,
 		},
 	}
+	if len(options.QueryType) > 0 {
+		item := NewQueryTypeItem(options.QueryType)
+		rule.items = append(rule.items, item)
+		rule.allItems = append(rule.allItems, item)
+	}
 	if len(options.Network) > 0 {
 		item := NewNetworkItem(options.Network)
 		rule.items = append(rule.items, item)
@@ -145,6 +150,14 @@ func NewDefaultHeadlessRule(ctx context.Context, options option.DefaultHeadlessR
 	}
 	if len(options.PackageName) > 0 {
 		item := NewPackageNameItem(options.PackageName)
+		rule.items = append(rule.items, item)
+		rule.allItems = append(rule.allItems, item)
+	}
+	if len(options.PackageNameRegex) > 0 {
+		item, err := NewPackageNameRegexItem(options.PackageNameRegex)
+		if err != nil {
+			return nil, E.Cause(err, "package_name_regex")
+		}
 		rule.items = append(rule.items, item)
 		rule.allItems = append(rule.allItems, item)
 	}

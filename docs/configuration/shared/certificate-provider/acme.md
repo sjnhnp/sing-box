@@ -6,7 +6,8 @@ icon: material/new-box
 
     :material-plus: [account_key](#account_key)  
     :material-plus: [key_type](#key_type)  
-    :material-plus: [detour](#detour)
+    :material-plus: [profile](#profile)  
+    :material-plus: [http_client](#http_client)
 
 # ACME
 
@@ -37,7 +38,8 @@ icon: material/new-box
   },
   "dns01_challenge": {},
   "key_type": "",
-  "detour": ""
+  "profile": "",
+  "http_client": "" // or {}
 }
 ```
 
@@ -141,10 +143,18 @@ The private key type to generate for new certificates.
 | `rsa2048`  | RSA     |
 | `rsa4096`  | RSA     |
 
-#### detour
+#### profile
 
 !!! question "Since sing-box 1.14.0"
 
-The tag of the upstream outbound.
+The ACME profile to use for certificate issuance.
 
-All provider HTTP requests will use this outbound.
+When empty and `provider` is Let's Encrypt, `shortlived` will be used automatically if any domain is an IP address.
+
+#### http_client
+
+!!! question "Since sing-box 1.14.0"
+
+HTTP Client for all provider HTTP requests.
+
+See [HTTP Client Fields](/configuration/shared/http-client/) for details.

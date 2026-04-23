@@ -6,6 +6,27 @@ icon: material/delete-alert
 
 ## 1.14.0
 
+#### Legacy `download_detour` remote rule-set option
+
+Legacy `download_detour` remote rule-set option is deprecated,
+use `http_client` instead.
+
+Old field will be removed in sing-box 1.16.0.
+
+#### Implicit default HTTP client
+
+Implicit default HTTP client using the default outbound for remote rule-sets is deprecated.
+Configure `http_clients` and `route.default_http_client` explicitly.
+
+Old behavior will be removed in sing-box 1.16.0.
+
+#### Legacy dialer options in Tailscale endpoint
+
+Legacy dialer options in Tailscale endpoints are deprecated,
+use `control_http_client` instead.
+
+Old fields will be removed in sing-box 1.16.0.
+
 #### Inline ACME options in TLS
 
 Inline ACME options (`tls.acme`) are deprecated
@@ -14,14 +35,50 @@ check [Migration](../migration/#migrate-inline-acme-to-certificate-provider).
 
 Old fields will be removed in sing-box 1.16.0.
 
+#### Legacy `strategy` DNS rule action option
+
+Legacy `strategy` DNS rule action option is deprecated.
+
+Old fields will be removed in sing-box 1.16.0.
+
+#### Legacy `rule_set_ip_cidr_accept_empty` DNS rule item
+
+Legacy `rule_set_ip_cidr_accept_empty` DNS rule item is deprecated,
+check [Migration](../migration/#migrate-address-filter-fields-to-response-matching).
+
+Old fields will be removed in sing-box 1.16.0.
+
+#### `independent_cache` DNS option
+
+`independent_cache` DNS option is deprecated.
+The DNS cache now always keys by transport, making this option unnecessary,
+check [Migration](../migration/#migrate-independent-dns-cache).
+
+Old fields will be removed in sing-box 1.16.0.
+
+#### `store_rdrc` cache file option
+
+`store_rdrc` cache file option is deprecated,
+check [Migration](../migration/#migrate-store-rdrc).
+
+Old fields will be removed in sing-box 1.16.0.
+
+#### Legacy Address Filter Fields in DNS rules
+
+Legacy Address Filter Fields (`ip_cidr`, `ip_is_private` without `match_response`)
+in DNS rules are deprecated,
+check [Migration](../migration/#migrate-address-filter-fields-to-response-matching).
+
+Old behavior will be removed in sing-box 1.16.0.
+
 ## 1.12.0
 
 #### Legacy DNS server formats
 
 DNS servers are refactored,
-check [Migration](../migration/#migrate-to-new-dns-servers).
+check [Migration](../migration/#migrate-to-new-dns-server-formats).
 
-Compatibility for old formats will be removed in sing-box 1.14.0.
+Old formats were removed in sing-box 1.14.0.
 
 #### `outbound` DNS rule item
 

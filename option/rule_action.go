@@ -115,6 +115,10 @@ func (r DNSRuleAction) MarshalJSON() ([]byte, error) {
 	case C.RuleActionTypeRoute:
 		r.Action = ""
 		v = r.RouteOptions
+	case C.RuleActionTypeEvaluate:
+		v = r.RouteOptions
+	case C.RuleActionTypeRespond:
+		v = nil
 	case C.RuleActionTypeRouteOptions:
 		v = r.RouteOptionsOptions
 	case C.RuleActionTypeReject:
@@ -123,6 +127,9 @@ func (r DNSRuleAction) MarshalJSON() ([]byte, error) {
 		v = r.PredefinedOptions
 	default:
 		return nil, E.New("unknown DNS rule action: " + r.Action)
+	}
+	if v == nil {
+		return badjson.MarshallObjects((_DNSRuleAction)(r))
 	}
 	return badjson.MarshallObjects((_DNSRuleAction)(r), v)
 }
@@ -137,6 +144,10 @@ func (r *DNSRuleAction) UnmarshalJSONContext(ctx context.Context, data []byte) e
 	case "", C.RuleActionTypeRoute:
 		r.Action = C.RuleActionTypeRoute
 		v = &r.RouteOptions
+	case C.RuleActionTypeEvaluate:
+		v = &r.RouteOptions
+	case C.RuleActionTypeRespond:
+		v = nil
 	case C.RuleActionTypeRouteOptions:
 		v = &r.RouteOptionsOptions
 	case C.RuleActionTypeReject:
@@ -145,6 +156,9 @@ func (r *DNSRuleAction) UnmarshalJSONContext(ctx context.Context, data []byte) e
 		v = &r.PredefinedOptions
 	default:
 		return E.New("unknown DNS rule action: " + r.Action)
+	}
+	if v == nil {
+		return json.UnmarshalDisallowUnknownFields(data, &_DNSRuleAction{})
 	}
 	return badjson.UnmarshallExcludedContext(ctx, data, (*_DNSRuleAction)(r), v)
 }
@@ -187,18 +201,20 @@ func (r *RouteOptionsActionOptions) UnmarshalJSON(data []byte) error {
 }
 
 type DNSRouteActionOptions struct {
-	Server       string                `json:"server,omitempty"`
-	Strategy     DomainStrategy        `json:"strategy,omitempty"`
-	DisableCache bool                  `json:"disable_cache,omitempty"`
-	RewriteTTL   *uint32               `json:"rewrite_ttl,omitempty"`
-	ClientSubnet *badoption.Prefixable `json:"client_subnet,omitempty"`
+	Server                 string                `json:"server,omitempty"`
+	Strategy               DomainStrategy        `json:"strategy,omitempty"`
+	DisableCache           bool                  `json:"disable_cache,omitempty"`
+	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
+	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
+	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
 }
 
 type _DNSRouteOptionsActionOptions struct {
-	Strategy     DomainStrategy        `json:"strategy,omitempty"`
-	DisableCache bool                  `json:"disable_cache,omitempty"`
-	RewriteTTL   *uint32               `json:"rewrite_ttl,omitempty"`
-	ClientSubnet *badoption.Prefixable `json:"client_subnet,omitempty"`
+	Strategy               DomainStrategy        `json:"strategy,omitempty"`
+	DisableCache           bool                  `json:"disable_cache,omitempty"`
+	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
+	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
+	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
 }
 
 type DNSRouteOptionsActionOptions _DNSRouteOptionsActionOptions
@@ -307,11 +323,12 @@ type RouteActionSniff struct {
 }
 
 type RouteActionResolve struct {
-	Server       string                `json:"server,omitempty"`
-	Strategy     DomainStrategy        `json:"strategy,omitempty"`
-	DisableCache bool                  `json:"disable_cache,omitempty"`
-	RewriteTTL   *uint32               `json:"rewrite_ttl,omitempty"`
-	ClientSubnet *badoption.Prefixable `json:"client_subnet,omitempty"`
+	Server                 string                `json:"server,omitempty"`
+	Strategy               DomainStrategy        `json:"strategy,omitempty"`
+	DisableCache           bool                  `json:"disable_cache,omitempty"`
+	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
+	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
+	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
 }
 
 type DNSRouteActionPredefined struct {

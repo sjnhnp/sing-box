@@ -5,7 +5,16 @@ icon: material/alert-decagram
 !!! quote "Changes in sing-box 1.14.0"
 
     :material-plus: [source_mac_address](#source_mac_address)  
-    :material-plus: [source_hostname](#source_hostname)
+    :material-plus: [source_hostname](#source_hostname)  
+    :material-plus: [match_response](#match_response)  
+    :material-delete-clock: [rule_set_ip_cidr_accept_empty](#rule_set_ip_cidr_accept_empty)  
+    :material-plus: [response_rcode](#response_rcode)  
+    :material-plus: [response_answer](#response_answer)  
+    :material-plus: [response_ns](#response_ns)  
+    :material-plus: [response_extra](#response_extra)  
+    :material-plus: [package_name_regex](#package_name_regex)  
+    :material-alert: [ip_version](#ip_version)  
+    :material-alert: [query_type](#query_type)
 
 !!! quote "Changes in sing-box 1.13.0"
 
@@ -94,12 +103,6 @@ icon: material/alert-decagram
           "192.168.0.1"
         ],
         "source_ip_is_private": false,
-        "ip_cidr": [
-          "10.0.0.0/24",
-          "192.168.0.1"
-        ],
-        "ip_is_private": false,
-        "ip_accept_any": false,
         "source_port": [
           12345
         ],
@@ -128,6 +131,9 @@ icon: material/alert-decagram
         ],
         "package_name": [
           "com.termux"
+        ],
+        "package_name_regex": [
+          "^com\\.termux.*"
         ],
         "user": [
           "sekai"
@@ -171,7 +177,17 @@ icon: material/alert-decagram
           "geosite-cn"
         ],
         "rule_set_ip_cidr_match_source": false,
-        "rule_set_ip_cidr_accept_empty": false,
+        "match_response": false,
+        "ip_cidr": [
+          "10.0.0.0/24",
+          "192.168.0.1"
+        ],
+        "ip_is_private": false,
+        "ip_accept_any": false,
+        "response_rcode": "",
+        "response_answer": [],
+        "response_ns": [],
+        "response_extra": [],
         "invert": false,
         "outbound": [
           "direct"
@@ -180,7 +196,8 @@ icon: material/alert-decagram
         "server": "local",
 
         // Deprecated
-        
+
+        "rule_set_ip_cidr_accept_empty": false,
         "rule_set_ipcidr_match_source": false,
         "geosite": [
           "cn"
@@ -228,11 +245,45 @@ Tags of [Inbound](/configuration/inbound/).
 
 #### ip_version
 
+!!! quote "Changes in sing-box 1.14.0"
+
+    This field now also applies when a DNS rule is matched from an internal
+    domain resolution that does not target a specific DNS server, such as a
+    [`resolve`](../../route/rule_action/#resolve) route rule action without a
+    `server` set. In earlier versions, only DNS queries received from a
+    client evaluated this field. See
+    [Migration](/migration/#ip_version-and-query_type-behavior-changes-in-dns-rules)
+    for the full list.
+
+    Setting this field makes the DNS rule incompatible in the same DNS
+    configuration with Legacy Address Filter Fields in DNS rules, the Legacy
+    `strategy` DNS rule action option, and the Legacy
+    `rule_set_ip_cidr_accept_empty` DNS rule item. To combine with
+    address-based filtering, use the [`evaluate`](../rule_action/#evaluate)
+    action and [`match_response`](#match_response).
+
 4 (A DNS query) or 6 (AAAA DNS query).
 
 Not limited if empty.
 
 #### query_type
+
+!!! quote "Changes in sing-box 1.14.0"
+
+    This field now also applies when a DNS rule is matched from an internal
+    domain resolution that does not target a specific DNS server, such as a
+    [`resolve`](../../route/rule_action/#resolve) route rule action without a
+    `server` set. In earlier versions, only DNS queries received from a
+    client evaluated this field. See
+    [Migration](/migration/#ip_version-and-query_type-behavior-changes-in-dns-rules)
+    for the full list.
+
+    Setting this field makes the DNS rule incompatible in the same DNS
+    configuration with Legacy Address Filter Fields in DNS rules, the Legacy
+    `strategy` DNS rule action option, and the Legacy
+    `rule_set_ip_cidr_accept_empty` DNS rule item. To combine with
+    address-based filtering, use the [`evaluate`](../rule_action/#evaluate)
+    action and [`match_response`](#match_response).
 
 DNS query type. Values can be integers or type name strings.
 
@@ -335,6 +386,12 @@ Match process path using regular expression.
 #### package_name
 
 Match android package name.
+
+#### package_name_regex
+
+!!! question "Since sing-box 1.14.0"
+
+Match android package name using regular expression.
 
 #### user
 
@@ -477,6 +534,25 @@ Make `ip_cidr` rule items in rule-sets match the source IP.
 
 Make `ip_cidr` rule items in rule-sets match the source IP.
 
+#### match_response
+
+!!! question "Since sing-box 1.14.0"
+
+Enable response-based matching. When enabled, this rule matches against the evaluated response
+(set by a preceding [`evaluate`](/configuration/dns/rule_action/#evaluate) action)
+instead of only matching the original query.
+
+The evaluated response can also be returned directly by a later [`respond`](/configuration/dns/rule_action/#respond) action.
+
+Required for Response Match Fields (`response_rcode`, `response_answer`, `response_ns`, `response_extra`).
+Also required for `ip_cidr`, `ip_is_private`, and `ip_accept_any` when used with `evaluate` or Response Match Fields.
+
+#### ip_accept_any
+
+!!! question "Since sing-box 1.12.0"
+
+Match when the DNS query response contains at least one address.
+
 #### invert
 
 Invert match result.
@@ -521,7 +597,12 @@ See [DNS Rule Actions](../rule_action/) for details.
 
     Moved to [DNS Rule Action](../rule_action#route).
 
-### Address Filter Fields
+### Legacy Address Filter Fields
+
+!!! failure "Deprecated in sing-box 1.14.0"
+
+    Legacy Address Filter Fields are deprecated and will be removed in sing-box 1.16.0,
+    check [Migration](/migration/#migrate-address-filter-fields-to-response-matching).
 
 Only takes effect for address requests (A/AAAA/HTTPS). When the query results do not match the address filtering rule items, the current rule will be skipped.
 
@@ -547,23 +628,61 @@ Match GeoIP with query response.
 
 Match IP CIDR with query response.
 
+As a Legacy Address Filter Field, deprecated. Use with `match_response` instead,
+check [Migration](/migration/#migrate-address-filter-fields-to-response-matching).
+
 #### ip_is_private
 
 !!! question "Since sing-box 1.9.0"
 
 Match private IP with query response.
 
+As a Legacy Address Filter Field, deprecated. Use with `match_response` instead,
+check [Migration](/migration/#migrate-address-filter-fields-to-response-matching).
+
 #### rule_set_ip_cidr_accept_empty
 
 !!! question "Since sing-box 1.10.0"
 
+!!! failure "Deprecated in sing-box 1.14.0"
+
+    `rule_set_ip_cidr_accept_empty` is deprecated and will be removed in sing-box 1.16.0,
+    check [Migration](/migration/#migrate-address-filter-fields-to-response-matching).
+
 Make `ip_cidr` rules in rule-sets accept empty query response.
 
-#### ip_accept_any
+### Response Match Fields
 
-!!! question "Since sing-box 1.12.0"
+!!! question "Since sing-box 1.14.0"
 
-Match any IP with query response.
+Match fields for the evaluated response. Require `match_response` to be set to `true`
+and a preceding rule with [`evaluate`](/configuration/dns/rule_action/#evaluate) action to populate the response.
+
+That evaluated response may also be returned directly by a later [`respond`](/configuration/dns/rule_action/#respond) action.
+
+#### response_rcode
+
+Match DNS response code.
+
+Accepted values are the same as in the [predefined action rcode](/configuration/dns/rule_action/#rcode).
+
+#### response_answer
+
+Match DNS answer records.
+
+Record format is the same as in [predefined action answer](/configuration/dns/rule_action/#answer).
+
+#### response_ns
+
+Match DNS name server records.
+
+Record format is the same as in [predefined action ns](/configuration/dns/rule_action/#ns).
+
+#### response_extra
+
+Match DNS extra records.
+
+Record format is the same as in [predefined action extra](/configuration/dns/rule_action/#extra).
 
 ### Logical Fields
 

@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+!!! quote "Changes in sing-box 1.14.0"
+
+    :material-plus: [bbr_profile](#bbr_profile)
+
 !!! quote "Changes in sing-box 1.11.0"
 
     :material-alert: [masquerade](#masquerade)  
@@ -30,7 +34,11 @@ icon: material/alert-decagram
   ],
   "ignore_client_bandwidth": false,
   "tls": {},
+
+  ... // QUIC Fields
+
   "masquerade": "", // or {}
+  "bbr_profile": "",
   "brutal_debug": false
 }
 ```
@@ -90,6 +98,10 @@ Deny clients to use the BBR CC.
 
 TLS configuration, see [TLS](/configuration/shared/tls/#inbound).
 
+### QUIC Fields
+
+See [QUIC Fields](/configuration/shared/quic/) for details.
+
 #### masquerade
 
 HTTP3 server behavior (URL string configuration) when authentication fails.
@@ -140,6 +152,14 @@ Fixed response headers.
 #### masquerade.content
 
 Fixed response content.
+
+#### bbr_profile
+
+!!! question "Since sing-box 1.14.0"
+
+BBR congestion control algorithm profile, one of `conservative` `standard` `aggressive`.
+
+`standard` is used by default.
 
 #### brutal_debug
 

@@ -69,7 +69,7 @@ type OverrideOptions struct {
 }
 
 func (s *StartedService) newInstance(profileContent string, overrideOptions *OverrideOptions) (*Instance, error) {
-	ctx := s.ctx
+	ctx := service.ExtendContext(s.ctx)
 	service.MustRegister[deprecated.Manager](ctx, new(deprecatedManager))
 	ctx, cancel := context.WithCancel(include.Context(ctx))
 	options, err := parseConfig(ctx, profileContent)
@@ -87,12 +87,17 @@ func (s *StartedService) newInstance(profileContent string, overrideOptions *Ove
 			}
 		}
 	}
-	if s.oomKiller && C.IsIos {
+	if s.oomKillerEnabled {
 		if !common.Any(options.Services, func(it option.Service) bool {
 			return it.Type == C.TypeOOMKiller
 		}) {
+			oomOptions := &option.OOMKillerServiceOptions{
+				KillerDisabled:      s.oomKillerDisabled,
+				MemoryLimitOverride: s.oomMemoryLimit,
+			}
 			options.Services = append(options.Services, option.Service{
-				Type: C.TypeOOMKiller,
+				Type:    C.TypeOOMKiller,
+				Options: oomOptions,
 			})
 		}
 	}

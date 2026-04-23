@@ -33,6 +33,7 @@ type Router struct {
 	dnsTransport      adapter.DNSTransportManager
 	connection        adapter.ConnectionManager
 	network           adapter.NetworkManager
+	httpClientManager adapter.HTTPClientManager
 	rules             []adapter.Rule
 	needFindProcess   bool
 	needFindNeighbor  bool
@@ -58,6 +59,7 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 		dnsTransport:      service.FromContext[adapter.DNSTransportManager](ctx),
 		connection:        service.FromContext[adapter.ConnectionManager](ctx),
 		network:           service.FromContext[adapter.NetworkManager](ctx),
+		httpClientManager: service.FromContext[adapter.HTTPClientManager](ctx),
 		rules:             make([]adapter.Rule, 0, len(options.Rules)),
 		ruleSetMap:        make(map[string]adapter.RuleSet),
 		needFindProcess:   hasRule(options.Rules, isProcessRule) || hasDNSRule(dnsOptions.Rules, isProcessDNSRule) || options.FindProcess,
@@ -70,6 +72,10 @@ func NewRouter(ctx context.Context, logFactory log.Factory, options option.Route
 
 func (r *Router) Initialize(rules []option.Rule, ruleSets []option.RuleSet) error {
 	for i, options := range rules {
+		err := R.ValidateNoNestedRuleActions(options)
+		if err != nil {
+			return E.Cause(err, "parse rule[", i, "]")
+		}
 		rule, err := R.NewRule(r.ctx, r.logger, options, false)
 		if err != nil {
 			return E.Cause(err, "parse rule[", i, "]")
@@ -94,15 +100,15 @@ func (r *Router) Start(stage adapter.StartStage) error {
 	monitor := taskmonitor.New(r.logger, C.StartTimeout)
 	switch stage {
 	case adapter.StartStateStart:
-		var cacheContext *adapter.HTTPStartContext
+		var startContext *adapter.HTTPStartContext
 		if len(r.ruleSets) > 0 {
 			monitor.Start("initialize rule-set")
-			cacheContext = adapter.NewHTTPStartContext(r.ctx)
+			startContext = adapter.NewHTTPStartContext()
 			var ruleSetStartGroup task.Group
 			for i, ruleSet := range r.ruleSets {
 				ruleSetInPlace := ruleSet
 				ruleSetStartGroup.Append0(func(ctx context.Context) error {
-					err := ruleSetInPlace.StartContext(ctx, cacheContext)
+					err := ruleSetInPlace.StartContext(ctx, startContext)
 					if err != nil {
 						return E.Cause(err, "initialize rule-set[", i, "]")
 					}
@@ -117,8 +123,8 @@ func (r *Router) Start(stage adapter.StartStage) error {
 				return err
 			}
 		}
-		if cacheContext != nil {
-			cacheContext.Close()
+		if startContext != nil {
+			startContext.Close()
 		}
 		r.network.Initialize(r.ruleSets)
 		needFindProcess := r.needFindProcess
@@ -276,5 +282,6 @@ func (r *Router) NeighborResolver() adapter.NeighborResolver {
 
 func (r *Router) ResetNetwork() {
 	r.network.ResetNetwork()
+	r.httpClientManager.ResetNetwork()
 	r.dns.ResetNetwork()
 }

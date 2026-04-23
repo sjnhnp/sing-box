@@ -6,6 +6,27 @@ icon: material/delete-alert
 
 ## 1.14.0
 
+#### 旧版远程规则集 `download_detour` 选项
+
+旧版远程规则集 `download_detour` 选项已废弃，
+请使用 `http_client` 代替。
+
+旧字段将在 sing-box 1.16.0 中被移除。
+
+#### 隐式默认 HTTP 客户端
+
+使用默认出站为远程规则集隐式创建默认 HTTP 客户端的行为已废弃。
+请显式配置 `http_clients` 和 `route.default_http_client`。
+
+旧行为将在 sing-box 1.16.0 中被移除。
+
+#### Tailscale 端点中的旧版拨号选项
+
+Tailscale 端点中的旧版拨号选项已废弃，
+请使用 `control_http_client` 代替。
+
+旧字段将在 sing-box 1.16.0 中被移除。
+
 #### TLS 中的内联 ACME 选项
 
 TLS 中的内联 ACME 选项（`tls.acme`）已废弃，
@@ -14,6 +35,41 @@ TLS 中的内联 ACME 选项（`tls.acme`）已废弃，
 
 旧字段将在 sing-box 1.16.0 中被移除。
 
+#### 旧版 DNS 规则动作 `strategy` 选项
+
+旧版 DNS 规则动作 `strategy` 选项已废弃。
+
+旧字段将在 sing-box 1.16.0 中被移除。
+
+#### 旧版 `rule_set_ip_cidr_accept_empty` DNS 规则项
+
+旧版 `rule_set_ip_cidr_accept_empty` DNS 规则项已废弃，
+参阅[迁移指南](/zh/migration/#迁移地址筛选字段到响应匹配)。
+
+旧字段将在 sing-box 1.16.0 中被移除。
+
+#### `independent_cache` DNS 选项
+
+`independent_cache` DNS 选项已废弃。
+DNS 缓存现在始终按传输分离，使此选项不再需要，
+参阅[迁移指南](/zh/migration/#迁移-independent-dns-cache)。
+
+旧字段将在 sing-box 1.16.0 中被移除。
+
+#### `store_rdrc` 缓存文件选项
+
+`store_rdrc` 缓存文件选项已废弃，
+参阅[迁移指南](/zh/migration/#迁移-store_rdrc)。
+
+旧字段将在 sing-box 1.16.0 中被移除。
+
+#### 旧版地址筛选字段 (DNS 规则)
+
+旧版地址筛选字段（不使用 `match_response` 的 `ip_cidr`、`ip_is_private`）已废弃，
+参阅[迁移指南](/zh/migration/#迁移地址筛选字段到响应匹配)。
+
+旧行为将在 sing-box 1.16.0 中被移除。
+
 ## 1.12.0
 
 #### 旧的 DNS 服务器格式
@@ -21,7 +77,7 @@ TLS 中的内联 ACME 选项（`tls.acme`）已废弃，
 DNS 服务器已重构，
 参阅 [迁移指南](/zh/migration/#迁移到新的-dns-服务器格式).
 
-对旧格式的兼容性将在 sing-box 1.14.0 中被移除。
+旧格式已在 sing-box 1.14.0 中被移除。
 
 #### `outbound` DNS 规则项
 

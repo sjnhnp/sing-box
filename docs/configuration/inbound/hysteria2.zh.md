@@ -2,6 +2,10 @@
 icon: material/alert-decagram
 ---
 
+!!! quote "sing-box 1.14.0 中的更改"
+
+    :material-plus: [bbr_profile](#bbr_profile)
+
 !!! quote "sing-box 1.11.0 中的更改"
 
     :material-alert: [masquerade](#masquerade)  
@@ -30,7 +34,11 @@ icon: material/alert-decagram
   ],
   "ignore_client_bandwidth": false,
   "tls": {},
+
+  ... // QUIC 字段
+
   "masquerade": "", // 或 {}
+  "bbr_profile": "",
   "brutal_debug": false
 }
 ```
@@ -87,6 +95,10 @@ Hysteria 用户
 
 TLS 配置, 参阅 [TLS](/zh/configuration/shared/tls/#入站)。
 
+### QUIC 字段
+
+参阅 [QUIC 字段](/zh/configuration/shared/quic/) 了解详情。
+
 #### masquerade
 
 HTTP3 服务器认证失败时的行为 （URL 字符串配置）。
@@ -137,6 +149,14 @@ HTTP3 服务器认证失败时的行为 （对象配置）。
 #### masquerade.content
 
 固定响应内容。
+
+#### bbr_profile
+
+!!! question "自 sing-box 1.14.0 起"
+
+BBR 拥塞控制算法配置，可选 `conservative` `standard` `aggressive`。
+
+默认使用 `standard`。
 
 #### brutal_debug
 
