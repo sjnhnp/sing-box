@@ -612,9 +612,15 @@ jobs:
       - name: Android - Checkout Client
         if: matrix.type == 'android'
         working-directory: sing-box
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |-
           rm -rf clients/android
-          git clone -b dev https://github.com/sjnhnp/sing-box-for-android.git clients/android
+          for i in 1 2 3; do
+            git clone -b dev https://x-access-token:${GITHUB_TOKEN}@github.com/sjnhnp/sing-box-for-android.git clients/android && break
+            echo "Clone attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
 
       - name: Android - Gradle cache
         if: matrix.type == 'android'
