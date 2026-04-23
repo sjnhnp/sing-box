@@ -36,6 +36,7 @@ import (
 
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/adapter/certificate"
 	"github.com/sagernet/sing-box/adapter/endpoint"
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
@@ -70,13 +71,14 @@ HEADER
     [[ "$PROTO_VMESS" == "true" ]] && echo '	"github.com/sagernet/sing-box/protocol/vmess"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/service/resolved"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/service/ssmapi"' >> "${OUTPUT_DIR}/registry.go"
+    echo '	originca "github.com/sagernet/sing-box/service/origin_ca"' >> "${OUTPUT_DIR}/registry.go"
     echo '	E "github.com/sagernet/sing/common/exceptions"' >> "${OUTPUT_DIR}/registry.go"
     echo ')' >> "${OUTPUT_DIR}/registry.go"
     echo '' >> "${OUTPUT_DIR}/registry.go"
 
     cat >> "${OUTPUT_DIR}/registry.go" << 'CONTEXT'
 func Context(ctx context.Context) context.Context {
-	return box.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), DNSTransportRegistry(), ServiceRegistry())
+	return box.Context(ctx, InboundRegistry(), OutboundRegistry(), EndpointRegistry(), DNSTransportRegistry(), ServiceRegistry(), CertificateProviderRegistry())
 }
 
 CONTEXT
@@ -205,6 +207,20 @@ func ServiceRegistry() *service.Registry {
 }
 
 SERVICE
+
+    # CertificateProviderRegistry function
+    cat >> "${OUTPUT_DIR}/registry.go" << 'CERTPROVIDER'
+func CertificateProviderRegistry() *certificate.Registry {
+	registry := certificate.NewRegistry()
+
+	registerACMECertificateProvider(registry)
+	registerTailscaleCertificateProvider(registry)
+	originca.RegisterCertificateProvider(registry)
+
+	return registry
+}
+
+CERTPROVIDER
 
     # Stub functions
     cat >> "${OUTPUT_DIR}/registry.go" << 'STUBS'
