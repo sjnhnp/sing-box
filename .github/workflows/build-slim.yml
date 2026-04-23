@@ -412,6 +412,8 @@ jobs:
                   cp -r "custom/$dir"/* "sing-box/$dir/"
                 fi
               done
+              cp custom/go.mod sing-box/go.mod || true
+              cp custom/go.sum sing-box/go.sum || true
               export OUTPUT_DIR="sing-box/include"
               chmod +x custom/.github/scripts/generate-registry.sh
               bash custom/.github/scripts/generate-registry.sh
@@ -429,6 +431,8 @@ jobs:
                   cp -r "custom/$dir"/* "sing-box/$dir/"
                 fi
               done
+              cp custom/go.mod sing-box/go.mod || true
+              cp custom/go.sum sing-box/go.sum || true
               cd sing-box && go mod tidy && cd ..
               PROTO_ENV='${{ needs.strategy_matrix.outputs.proto_env }}'
               export PROTO_VLESS=$(echo "$PROTO_ENV" | jq -r '.PROTO_VLESS')
@@ -480,6 +484,8 @@ jobs:
                   Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
                 }
               }
+              if (Test-Path "custom/go.mod") { Copy-Item "custom/go.mod" "sing-box/go.mod" -Force }
+              if (Test-Path "custom/go.sum") { Copy-Item "custom/go.sum" "sing-box/go.sum" -Force }
               $env:OUTPUT_DIR="sing-box/include"
               bash custom/.github/scripts/generate-registry.sh
               Set-Location sing-box
@@ -498,6 +504,8 @@ jobs:
                   Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
                 }
               }
+              if (Test-Path "custom/go.mod") { Copy-Item "custom/go.mod" "sing-box/go.mod" -Force }
+              if (Test-Path "custom/go.sum") { Copy-Item "custom/go.sum" "sing-box/go.sum" -Force }
               Set-Location sing-box
               go mod tidy
               Set-Location ..
