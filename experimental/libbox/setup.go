@@ -32,9 +32,10 @@ var (
 	sLogMaxLines             int
 	sDebug                   bool
 	sCrashReportSource       string
-	sOOMKillerEnabled        bool
-	sOOMKillerDisabled       bool
-	sOOMMemoryLimit          int64
+	sOOMKillerEnabled         bool
+	sOOMKillerDisabled        bool
+	sOOMKillerDisableReporting bool
+	sOOMMemoryLimit           int64
 )
 
 func init() {
@@ -52,9 +53,10 @@ type SetupOptions struct {
 	LogMaxLines             int
 	Debug                   bool
 	CrashReportSource       string
-	OomKillerEnabled        bool
-	OomKillerDisabled       bool
-	OomMemoryLimit          int64
+	OomKillerEnabled         bool
+	OomKillerDisabled        bool
+	OomKillerDisableReporting bool
+	OomMemoryLimit           int64
 }
 
 func applySetupOptions(options *SetupOptions) {
@@ -80,6 +82,7 @@ func applySetupOptions(options *SetupOptions) {
 func ReloadSetupOptions(options *SetupOptions) {
 	sOOMKillerEnabled = options.OomKillerEnabled
 	sOOMKillerDisabled = options.OomKillerDisabled
+	sOOMKillerDisableReporting = options.OomKillerDisableReporting
 	sOOMMemoryLimit = options.OomMemoryLimit
 	if sOOMKillerEnabled {
 		if sOOMMemoryLimit == 0 && C.IsIos {

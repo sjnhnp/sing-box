@@ -93,6 +93,7 @@ func (s *StartedService) newInstance(profileContent string, overrideOptions *Ove
 		}) {
 			oomOptions := &option.OOMKillerServiceOptions{
 				KillerDisabled:      s.oomKillerDisabled,
+				DisableReporting:    s.oomKillerDisableReporting,
 				MemoryLimitOverride: s.oomMemoryLimit,
 			}
 			options.Services = append(options.Services, option.Service{

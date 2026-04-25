@@ -10,6 +10,7 @@ type OOMKillerServiceOptions struct {
 	SafetyMargin        *byteformats.MemoryBytes `json:"safety_margin,omitempty"`
 	MinInterval         badoption.Duration       `json:"min_interval,omitempty"`
 	MaxInterval         badoption.Duration       `json:"max_interval,omitempty"`
+	DisableReporting    bool                     `json:"disable_reporting,omitempty"`
 	KillerDisabled      bool                     `json:"-"`
 	MemoryLimitOverride uint64                   `json:"-"`
 }
