@@ -74,7 +74,7 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 		metadata.LastInbound = metadata.Inbound
 		metadata.Inbound = metadata.InboundDetour
 		metadata.InboundDetour = ""
-		injectable.NewConnectionEx(ctx, conn, metadata, onClose)
+		injectable.NewConnection(ctx, conn, metadata, onClose)
 		return nil
 	}
 	metadata.Network = N.NetworkTCP
@@ -152,8 +152,8 @@ func (r *Router) routeConnection(ctx context.Context, conn net.Conn, metadata ad
 	for _, tracker := range r.trackers {
 		conn = tracker.RoutedConnection(ctx, conn, metadata, selectedRule, selectedOutbound)
 	}
-	if outboundHandler, isHandler := selectedOutbound.(adapter.ConnectionHandlerEx); isHandler {
-		outboundHandler.NewConnectionEx(ctx, conn, metadata, onClose)
+	if outboundHandler, isHandler := selectedOutbound.(adapter.ConnectionHandler); isHandler {
+		outboundHandler.NewConnection(ctx, conn, metadata, onClose)
 	} else {
 		r.connection.NewConnection(ctx, selectedOutbound, conn, metadata, onClose)
 	}
@@ -209,7 +209,7 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 		metadata.LastInbound = metadata.Inbound
 		metadata.Inbound = metadata.InboundDetour
 		metadata.InboundDetour = ""
-		injectable.NewPacketConnectionEx(ctx, conn, metadata, onClose)
+		injectable.NewPacketConnection(ctx, conn, metadata, onClose)
 		return nil
 	}
 	// TODO: move to UoT
@@ -281,8 +281,8 @@ func (r *Router) routePacketConnection(ctx context.Context, conn N.PacketConn, m
 	if metadata.FakeIP {
 		conn = bufio.NewNATPacketConn(bufio.NewNetPacketConn(conn), metadata.OriginDestination, metadata.Destination)
 	}
-	if outboundHandler, isHandler := selectedOutbound.(adapter.PacketConnectionHandlerEx); isHandler {
-		outboundHandler.NewPacketConnectionEx(ctx, conn, metadata, onClose)
+	if outboundHandler, isHandler := selectedOutbound.(adapter.PacketConnectionHandler); isHandler {
+		outboundHandler.NewPacketConnection(ctx, conn, metadata, onClose)
 	} else {
 		r.connection.NewPacketConnection(ctx, selectedOutbound, conn, metadata, onClose)
 	}
@@ -408,23 +408,6 @@ func (r *Router) matchRule(
 	buffers []*buf.Buffer, packetBuffers []*N.PacketBuffer, fatalErr error,
 ) {
 	r.searchProcessInfo(ctx, metadata)
-	if r.neighborResolver != nil && metadata.SourceMACAddress == nil && metadata.Source.Addr.IsValid() {
-		mac, macFound := r.neighborResolver.LookupMAC(metadata.Source.Addr)
-		if macFound {
-			metadata.SourceMACAddress = mac
-		}
-		hostname, hostnameFound := r.neighborResolver.LookupHostname(metadata.Source.Addr)
-		if hostnameFound {
-			metadata.SourceHostname = hostname
-			if macFound {
-				r.logger.InfoContext(ctx, "found neighbor: ", mac, ", hostname: ", hostname)
-			} else {
-				r.logger.InfoContext(ctx, "found neighbor hostname: ", hostname)
-			}
-		} else if macFound {
-			r.logger.InfoContext(ctx, "found neighbor: ", mac)
-		}
-	}
 	if r.neighborResolver != nil && metadata.SourceMACAddress == nil && metadata.Source.Addr.IsValid() {
 		mac, macFound := r.neighborResolver.LookupMAC(metadata.Source.Addr)
 		if macFound {
@@ -808,6 +791,7 @@ func (r *Router) actionResolve(ctx context.Context, metadata *adapter.InboundCon
 			DisableCache:           action.DisableCache,
 			DisableOptimisticCache: action.DisableOptimisticCache,
 			RewriteTTL:             action.RewriteTTL,
+			Timeout:                action.Timeout,
 			ClientSubnet:           action.ClientSubnet,
 		})
 		if err != nil {
