@@ -164,12 +164,6 @@ func (s *Store) update() error {
 		}
 		appendPEMBlock(pemBuffer, string(pemContent))
 	}
-	switch s.store {
-	case C.CertificateStoreMozilla:
-		currentPEM = append(currentPEM, mozillaIncludedPEM)
-	case C.CertificateStoreChrome:
-		currentPEM = append(currentPEM, chromeIncludedPEM)
-	}
 	if s.certificate != "" {
 		if !currentPool.AppendCertsFromPEM([]byte(s.certificate)) {
 			return E.New("invalid certificate PEM strings")
