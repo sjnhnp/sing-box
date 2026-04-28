@@ -10,7 +10,7 @@ on:
       mode:
         description: "Build Mode (Ignore if Version set)"
         required: true
-        default: "beta"
+        default: "stable"
         type: choice
         options:
           - alpha
