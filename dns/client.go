@@ -562,24 +562,6 @@ func (c *Client) exchangeToTransport(ctx context.Context, transport adapter.DNST
 	return nil, err
 }
 
-func (c *Client) exchangeToTransport(ctx context.Context, transport adapter.DNSTransport, message *dns.Msg, timeout time.Duration) (*dns.Msg, error) {
-	if timeout == 0 {
-		timeout = c.timeout
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	response, err := transport.Exchange(ctx, message)
-	if err == nil {
-		stripDNSPadding(response)
-		return response, nil
-	}
-	var rcodeError RcodeError
-	if errors.As(err, &rcodeError) {
-		return FixedResponseStatus(message, int(rcodeError)), nil
-	}
-	return nil, err
-}
-
 func MessageToAddresses(response *dns.Msg) []netip.Addr {
 	return adapter.DNSResponseAddresses(response)
 }
