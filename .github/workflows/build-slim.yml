@@ -617,7 +617,7 @@ jobs:
         run: |-
           rm -rf clients/android
           for i in 1 2 3; do
-            git clone -b dev https://x-access-token:${GITHUB_TOKEN}@github.com/sjnhnp/sing-box-for-android.git clients/android && break
+            git clone --recurse-submodules -b dev https://x-access-token:${GITHUB_TOKEN}@github.com/sjnhnp/sing-box-for-android.git clients/android && break
             echo "Clone attempt $i failed, retrying in 10s..."
             sleep 10
           done
