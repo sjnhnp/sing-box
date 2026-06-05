@@ -23,6 +23,7 @@ type TailscaleEndpointStatus struct {
 	MagicDNSSuffix string
 	Self           *TailscalePeer
 	ExitNode       *TailscalePeer
+	KeyAuth        bool
 	userGroups     []*TailscaleUserGroup
 }
 
@@ -84,6 +85,10 @@ type TailscaleStatusHandler interface {
 	OnError(message string)
 }
 
+type TailscaleStatusSubscription struct {
+	streamSession
+}
+
 func tailscaleStatusUpdateFromGRPC(update *daemon.TailscaleStatusUpdate) *TailscaleStatusUpdate {
 	endpoints := make([]*TailscaleEndpointStatus, len(update.Endpoints))
 	for i, endpoint := range update.Endpoints {
@@ -103,6 +108,7 @@ func tailscaleEndpointStatusFromGRPC(status *daemon.TailscaleEndpointStatus) *Ta
 		AuthURL:        status.AuthURL,
 		NetworkName:    status.NetworkName,
 		MagicDNSSuffix: status.MagicDNSSuffix,
+		KeyAuth:        status.GetKeyAuth(),
 		userGroups:     userGroups,
 	}
 	if status.Self != nil {

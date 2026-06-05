@@ -1151,6 +1151,18 @@ func resolveOutbound(instance *Instance, tag string) (adapter.Outbound, error) {
 	return outbound, nil
 }
 
+func resolveTailscaleEndpoint(instance *Instance, tag string) (adapter.Endpoint, error) {
+	endpointManager := service.FromContext[adapter.EndpointManager](instance.ctx)
+	endpoint, loaded := endpointManager.Get(tag)
+	if !loaded {
+		return nil, E.New("endpoint not found: ", tag)
+	}
+	if endpoint.Type() != C.TypeTailscale {
+		return nil, E.New("endpoint is not Tailscale: ", tag)
+	}
+	return endpoint, nil
+}
+
 func (s *StartedService) StartNetworkQualityTest(
 	request *NetworkQualityTestRequest,
 	server grpc.ServerStreamingServer[NetworkQualityTestProgress],
@@ -1380,6 +1392,7 @@ func tailscaleEndpointStatusToProto(tag string, s *adapter.TailscaleEndpointStat
 		NetworkName:    s.NetworkName,
 		MagicDNSSuffix: s.MagicDNSSuffix,
 		UserGroups:     userGroups,
+		KeyAuth:        s.KeyAuth,
 	}
 	if s.Self != nil {
 		result.Self = tailscalePeerToProto(s.Self)
@@ -1423,19 +1436,11 @@ func (s *StartedService) StartTailscalePing(
 	boxService := s.instance
 	s.serviceAccess.RUnlock()
 
-	endpointManager := service.FromContext[adapter.EndpointManager](boxService.ctx)
-	if endpointManager == nil {
-		return status.Error(codes.FailedPrecondition, "endpoint manager not available")
-	}
-
 	var provider adapter.TailscaleEndpoint
 	if request.EndpointTag != "" {
-		endpoint, loaded := endpointManager.Get(request.EndpointTag)
-		if !loaded {
-			return status.Error(codes.NotFound, "endpoint not found: "+request.EndpointTag)
-		}
-		if endpoint.Type() != C.TypeTailscale {
-			return status.Error(codes.InvalidArgument, "endpoint is not Tailscale: "+request.EndpointTag)
+		endpoint, err := resolveTailscaleEndpoint(boxService, request.EndpointTag)
+		if err != nil {
+			return err
 		}
 		pingProvider, loaded := endpoint.(adapter.TailscaleEndpoint)
 		if !loaded {
@@ -1443,6 +1448,10 @@ func (s *StartedService) StartTailscalePing(
 		}
 		provider = pingProvider
 	} else {
+		endpointManager := service.FromContext[adapter.EndpointManager](boxService.ctx)
+		if endpointManager == nil {
+			return status.Error(codes.FailedPrecondition, "endpoint manager not available")
+		}
 		for _, endpoint := range endpointManager.Endpoints() {
 			if endpoint.Type() != C.TypeTailscale {
 				continue
@@ -1479,25 +1488,39 @@ func (s *StartedService) SetTailscaleExitNode(ctx context.Context, request *SetT
 	boxService := s.instance
 	s.serviceAccess.RUnlock()
 
-	endpointManager := service.FromContext[adapter.EndpointManager](boxService.ctx)
-	if endpointManager == nil {
-		return nil, status.Error(codes.FailedPrecondition, "endpoint manager not available")
-	}
-	if request.EndpointTag == "" {
-		return nil, status.Error(codes.InvalidArgument, "endpoint tag is required")
-	}
-	endpoint, loaded := endpointManager.Get(request.EndpointTag)
-	if !loaded {
-		return nil, status.Error(codes.NotFound, "endpoint not found: "+request.EndpointTag)
-	}
-	if endpoint.Type() != C.TypeTailscale {
-		return nil, status.Error(codes.InvalidArgument, "endpoint is not Tailscale: "+request.EndpointTag)
+	endpoint, err := resolveTailscaleEndpoint(boxService, request.EndpointTag)
+	if err != nil {
+		return nil, err
 	}
 	tsEndpoint, loaded := endpoint.(adapter.TailscaleEndpoint)
 	if !loaded {
 		return nil, status.Error(codes.FailedPrecondition, "endpoint does not support tailscale")
 	}
 	err = tsEndpoint.SetTailscaleExitNode(ctx, request.StableID)
+	if err != nil {
+		return nil, err
+	}
+	return &emptypb.Empty{}, nil
+}
+
+func (s *StartedService) TailscaleLogout(ctx context.Context, request *TailscaleLogoutRequest) (*emptypb.Empty, error) {
+	err := s.waitForStarted(ctx)
+	if err != nil {
+		return nil, err
+	}
+	s.serviceAccess.RLock()
+	boxService := s.instance
+	s.serviceAccess.RUnlock()
+
+	endpoint, err := resolveTailscaleEndpoint(boxService, request.EndpointTag)
+	if err != nil {
+		return nil, err
+	}
+	tsEndpoint, loaded := endpoint.(adapter.TailscaleEndpoint)
+	if !loaded {
+		return nil, status.Error(codes.FailedPrecondition, "endpoint does not support tailscale")
+	}
+	err = tsEndpoint.Logout(ctx)
 	if err != nil {
 		return nil, err
 	}
