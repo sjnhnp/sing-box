@@ -6,9 +6,7 @@ option go_package = "github.com/sagernet/sing-box/daemon";
 import "google/protobuf/empty.proto";
 
 service StartedService {
-  rpc StopService(google.protobuf.Empty) returns (google.protobuf.Empty);
-  rpc ReloadService(google.protobuf.Empty) returns (google.protobuf.Empty);
-
+  rpc GetVersion(google.protobuf.Empty) returns(Version) {}
   rpc SubscribeServiceStatus(google.protobuf.Empty) returns(stream ServiceStatus) {}
   rpc SubscribeLog(google.protobuf.Empty) returns(stream Log) {}
   rpc GetDefaultLogLevel(google.protobuf.Empty) returns(DefaultLogLevel) {}
@@ -24,9 +22,6 @@ service StartedService {
   rpc SelectOutbound(SelectOutboundRequest) returns (google.protobuf.Empty) {}
   rpc SetGroupExpand(SetGroupExpandRequest) returns (google.protobuf.Empty) {}
 
-  rpc GetSystemProxyStatus(google.protobuf.Empty) returns(SystemProxyStatus) {}
-  rpc SetSystemProxyEnabled(SetSystemProxyEnabledRequest) returns(google.protobuf.Empty) {}
-  rpc TriggerDebugCrash(DebugCrashRequest) returns(google.protobuf.Empty) {}
   rpc TriggerOOMReport(google.protobuf.Empty) returns(google.protobuf.Empty) {}
 
   rpc SubscribeConnections(SubscribeConnectionsRequest) returns(stream ConnectionEvents) {}
@@ -45,6 +40,11 @@ service StartedService {
   rpc StartTailscaleSSHSession(stream TailscaleSSHClientMessage) returns (stream TailscaleSSHServerMessage) {}
 }
 
+message Version {
+  string version = 1;
+  int32 apiVersion = 2;
+}
+
 message ServiceStatus {
   enum Type {
     IDLE = 0;
@@ -55,10 +55,6 @@ message ServiceStatus {
   }
   Type status = 1;
   string errorMessage = 2;
-}
-
-message ReloadServiceRequest {
-  string newProfileContent = 1;
 }
 
 message SubscribeStatusRequest {
@@ -141,24 +137,6 @@ message ClashMode {
 message ClashModeStatus {
   repeated string modeList = 1;
   string currentMode = 2;
-}
-
-message SystemProxyStatus {
-  bool available = 1;
-  bool enabled = 2;
-}
-
-message SetSystemProxyEnabledRequest {
-  bool enabled = 1;
-}
-
-message DebugCrashRequest {
-  enum Type {
-    GO = 0;
-    NATIVE = 1;
-  }
-
-  Type type = 1;
 }
 
 message SubscribeConnectionsRequest {
