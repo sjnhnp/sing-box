@@ -17,7 +17,6 @@ import (
 	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/protocol/group"
-	"github.com/sagernet/sing-box/service/oomkiller"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/batch"
 	"github.com/sagernet/sing/common/memory"
@@ -32,7 +31,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-const APIVersion = 1
+const APIVersion = 2
 
 var _ StartedServiceServer = (*StartedService)(nil)
 
@@ -62,7 +61,6 @@ type StartedService struct {
 	startedAt               time.Time
 	urlTestSubscriber       *observable.Subscriber[struct{}]
 	urlTestObserver         *observable.Observer[struct{}]
-	urlTestHistoryStorage   *urltest.HistoryStorage
 	clashModeSubscriber     *observable.Subscriber[struct{}]
 	clashModeObserver       *observable.Observer[struct{}]
 }
@@ -102,7 +100,6 @@ func NewStartedService(options ServiceOptions) *StartedService {
 		serviceStatusSubscriber: observable.NewSubscriber[*ServiceStatus](4),
 		logSubscriber:           observable.NewSubscriber[*log.Entry](128),
 		urlTestSubscriber:       observable.NewSubscriber[struct{}](1),
-		urlTestHistoryStorage:   urltest.NewHistoryStorage(),
 		clashModeSubscriber:     observable.NewSubscriber[struct{}](1),
 	}
 	s.serviceStatusObserver = observable.NewObserver(s.serviceStatusSubscriber, 2)
@@ -202,9 +199,9 @@ func (s *StartedService) StartOrReloadService(profileContent string, options *Ov
 		return s.updateStatusError(err)
 	}
 	s.instance = instance
-	instance.urlTestHistoryStorage.SetHook(s.urlTestSubscriber)
+	instance.urlTestHistoryStorage.AddUpdateHook(s.urlTestSubscriber)
 	if instance.clashServer != nil {
-		instance.clashServer.SetModeUpdateHook(s.clashModeSubscriber)
+		instance.clashServer.AddModeUpdateHook(s.clashModeSubscriber)
 	}
 	s.serviceAccess.Unlock()
 	err = instance.Start()
@@ -512,7 +509,7 @@ func (s *StartedService) GetClashModeStatus(ctx context.Context, empty *emptypb.
 	clashServer := s.instance.clashServer
 	s.serviceAccess.RUnlock()
 	if clashServer == nil {
-		return nil, status.Error(codes.Unimplemented, "clash mode not available")
+		return nil, status.Error(codes.NotFound, "clash mode not available")
 	}
 	return &ClashModeStatus{
 		ModeList:    clashServer.ModeList(),
@@ -539,7 +536,7 @@ func (s *StartedService) SubscribeClashMode(empty *emptypb.Empty, server grpc.Se
 		clashServer := s.instance.clashServer
 		if clashServer == nil {
 			s.serviceAccess.RUnlock()
-			return status.Error(codes.Unimplemented, "clash mode not available")
+			return status.Error(codes.NotFound, "clash mode not available")
 		}
 		message := &ClashMode{Mode: clashServer.Mode()}
 		s.serviceAccess.RUnlock()
@@ -568,7 +565,7 @@ func (s *StartedService) SetClashMode(ctx context.Context, request *ClashMode) (
 	clashServer := s.instance.clashServer
 	s.serviceAccess.RUnlock()
 	if clashServer == nil {
-		return nil, status.Error(codes.Unimplemented, "clash mode not available")
+		return nil, status.Error(codes.NotFound, "clash mode not available")
 	}
 	clashServer.SetMode(request.Mode)
 	return &emptypb.Empty{}, nil
@@ -649,7 +646,6 @@ func (s *StartedService) SelectOutbound(ctx context.Context, request *SelectOutb
 	if !selector.SelectOutbound(request.OutboundTag) {
 		return nil, status.Error(codes.NotFound, "outbound not found in selector: "+request.OutboundTag)
 	}
-	s.urlTestObserver.Emit(struct{}{})
 	return &emptypb.Empty{}, nil
 }
 
@@ -670,18 +666,6 @@ func (s *StartedService) SetGroupExpand(ctx context.Context, request *SetGroupEx
 		}
 	}
 	return &emptypb.Empty{}, nil
-}
-
-func (s *StartedService) TriggerOOMReport(ctx context.Context, _ *emptypb.Empty) (*emptypb.Empty, error) {
-	instance := s.Instance()
-	if instance == nil {
-		return nil, status.Error(codes.FailedPrecondition, "service not started")
-	}
-	reporter := service.FromContext[oomkiller.OOMReporter](instance.ctx)
-	if reporter == nil {
-		return nil, status.Error(codes.Unavailable, "OOM reporter not available")
-	}
-	return &emptypb.Empty{}, reporter.WriteReport(memory.Total())
 }
 
 func (s *StartedService) SubscribeConnections(request *SubscribeConnectionsRequest, server grpc.ServerStreamingServer[ConnectionEvents]) error {

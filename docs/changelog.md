@@ -2,6 +2,36 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0-alpha.32
+
+* Add dashboard support for the API service **1**
+* Add USB/IP service **2**
+* Fixes and improvements
+
+**1**:
+
+The [sing-box API service](/configuration/service/api/) can now download, update
+and serve [sing-box-dashboard](https://github.com/SagerNet/sing-box-dashboard)
+directly over its listener, configured via the new
+[`dashboard`](/configuration/service/api/#dashboard) option.
+
+**2**:
+
+New [USB/IP Server](/configuration/service/usbip-server/) and
+[USB/IP Client](/configuration/service/usbip-client/) services export and import
+USB devices over the [USB/IP](https://usbip.sourceforge.net/) protocol, built on
+[sing-usbip](https://github.com/SagerNet/sing-usbip), which adds hotplug while
+staying interoperable with standard USB/IP. Exporting config-selected local
+devices (`provider: default`) runs via the CLI on Linux, Windows, and macOS and
+requires elevated privileges (macOS additionally needs a CGO build and disabled
+System Integrity Protection). With `provider: dynamic`, devices are instead
+supplied at runtime through the API service by the graphical clients on macOS and
+Android, or the [sing-box Dashboard](https://github.com/SagerNet/sing-box-dashboard).
+
+#### 1.14.0-alpha.31
+
+* Fixes and improvements
+
 #### 1.14.0-alpha.30
 
 * Introducing sing-box API service **1**
@@ -16,16 +46,7 @@ server for observing and controlling the running sing-box instance,
 exposing the same interface the graphical clients use locally: service
 status, logs, outbound groups (selection and URL tests), Clash mode,
 connection tracking, and tools such as network quality tests, STUN
-tests, and Tailscale operations. The server also accepts
-[gRPC-Web](https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-WEB.md)
-requests, including the WebSocket transport of
-[@improbable-eng/grpc-web](https://github.com/improbable-eng/grpc-web)
-for bidirectional streaming methods, so browsers can connect directly.
-Clients authenticate via the
-[`secret`](/configuration/service/api/#secret) field; TLS and CORS
-options are available. Connection tracking and Clash mode methods
-require the [Clash API](/configuration/experimental/clash-api/) to be
-configured.
+tests, and Tailscale operations.
 
 **2**:
 

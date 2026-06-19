@@ -458,23 +458,17 @@ func (c *CommandClient) handleClashModeStream() {
 
 	modeStatus, err := client.GetClashModeStatus(ctx, &emptypb.Empty{})
 	if err != nil {
-		c.handler.Disconnected(E.Cause(err, "get clash mode status").Error())
-		return
+		if status.Code(err) != codes.NotFound {
+			c.handler.Disconnected(E.Cause(err, "get clash mode status").Error())
+			return
+		}
+		modeStatus = &daemon.ClashModeStatus{}
 	}
 
 	if sFixAndroidStack {
-		go func() {
-			c.handler.InitializeClashMode(newIterator(modeStatus.ModeList), modeStatus.CurrentMode)
-			if len(modeStatus.ModeList) == 0 {
-				c.handler.Disconnected(E.Cause(os.ErrInvalid, "empty clash mode list").Error())
-			}
-		}()
+		go c.handler.InitializeClashMode(newIterator(modeStatus.ModeList), modeStatus.CurrentMode)
 	} else {
 		c.handler.InitializeClashMode(newIterator(modeStatus.ModeList), modeStatus.CurrentMode)
-		if len(modeStatus.ModeList) == 0 {
-			c.handler.Disconnected(E.Cause(os.ErrInvalid, "empty clash mode list").Error())
-			return
-		}
 	}
 
 	if len(modeStatus.ModeList) == 0 {
@@ -483,6 +477,9 @@ func (c *CommandClient) handleClashModeStream() {
 
 	stream, err := client.SubscribeClashMode(ctx, &emptypb.Empty{})
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return
+		}
 		c.handler.Disconnected(E.Cause(err, "subscribe clash mode").Error())
 		return
 	}
@@ -490,6 +487,9 @@ func (c *CommandClient) handleClashModeStream() {
 	for {
 		mode, err := stream.Recv()
 		if err != nil {
+			if status.Code(err) == codes.NotFound {
+				return
+			}
 			c.handler.Disconnected(E.Cause(err, "clash mode stream recv").Error())
 			return
 		}
@@ -675,7 +675,7 @@ func (c *CommandClient) TriggerNativeCrash() error {
 }
 
 func (c *CommandClient) TriggerOOMReport() error {
-	_, err := callWithResult(c, func(ctx context.Context, client daemon.StartedServiceClient) (*emptypb.Empty, error) {
+	_, err := callManagedWithResult(c, func(ctx context.Context, client daemon.ManagedServiceClient) (*emptypb.Empty, error) {
 		return client.TriggerOOMReport(ctx, &emptypb.Empty{})
 	})
 	if err != nil {
@@ -926,6 +926,61 @@ func (c *CommandClient) SubscribeTailscaleStatus(handler TailscaleStatusHandler)
 	return session, nil
 }
 
+func (c *CommandClient) SubscribeUSBIPServerStatus(handler USBIPServerStatusHandler) (*USBIPServerStatusSubscription, error) {
+	client, parentCtx, err := c.getClientForCall()
+	if err != nil {
+		return nil, E.Cause(err, "subscribe usbip server status")
+	}
+
+	streamCtx, cancel := context.WithCancel(parentCtx)
+	session := &USBIPServerStatusSubscription{
+		streamSession: streamSession{
+			ctx:       streamCtx,
+			cancel:    cancel,
+			closeDone: make(chan struct{}),
+		},
+	}
+
+	failStart := func(cause error, message string) (*USBIPServerStatusSubscription, error) {
+		cancel()
+		if c.standalone {
+			c.closeConnection()
+		}
+		return nil, E.Cause(cause, message)
+	}
+
+	stream, err := client.SubscribeUSBIPServerStatus(streamCtx, &emptypb.Empty{})
+	if err != nil {
+		return failStart(err, "subscribe usbip server status")
+	}
+
+	standalone := c.standalone
+	go func() {
+		defer func() {
+			close(session.closeDone)
+			if standalone {
+				c.closeConnection()
+			}
+		}()
+		for {
+			event, recvErr := stream.Recv()
+			if recvErr != nil {
+				if session.ctx.Err() != nil {
+					return
+				}
+				if status.Code(recvErr) == codes.NotFound || status.Code(recvErr) == codes.Unavailable {
+					return
+				}
+				handler.OnError(E.Cause(recvErr, "usbip server status recv").Error())
+				return
+			}
+			handler.OnStatusUpdate(usbipServerStatusUpdateFromGRPC(event))
+		}
+	}()
+
+	return session, nil
+}
+
 func (c *CommandClient) SetTailscaleExitNode(endpointTag string, stableID string) error {
 	_, err := callWithResult(c, func(ctx context.Context, client daemon.StartedServiceClient) (*emptypb.Empty, error) {
 		return client.SetTailscaleExitNode(ctx, &daemon.SetTailscaleExitNodeRequest{
@@ -1120,6 +1175,62 @@ func (c *CommandClient) StartTailscaleSSHSession(opts *TailscaleSSHOptions, hand
 	go func() {
 		session.wg.Wait()
 		close(session.closeDone)
+		if standalone {
+			c.closeConnection()
+		}
+	}()
+
+	return session, nil
+}
+
+func (c *CommandClient) ProvideUSBDevices(handler USBProviderHandler) (*USBProviderSession, error) {
+	client, parentCtx, err := c.getClientForCall()
+	if err != nil {
+		return nil, E.Cause(err, "provide usb devices")
+	}
+
+	streamCtx, cancel := context.WithCancel(parentCtx)
+	stream, err := client.ProvideUSBDevices(streamCtx)
+	if err != nil {
+		cancel()
+		if c.standalone {
+			c.closeConnection()
+		}
+		return nil, E.Cause(err, "provide usb devices")
+	}
+
+	session := &USBProviderSession{
+		stream:    stream,
+		ctx:       streamCtx,
+		cancel:    cancel,
+		closeDone: make(chan struct{}),
+	}
+
+	standalone := c.standalone
+	go func() {
+		defer close(session.closeDone)
+		for {
+			message, recvErr := stream.Recv()
+			if recvErr == io.EOF {
+				cancel()
+				break
+			}
+			if recvErr != nil {
+				handler.OnError("", E.Cause(recvErr, "usb provider recv").Error())
+				cancel()
+				break
+			}
+			switch payload := message.GetMessage().(type) {
+			case *daemon.USBServerMessage_Ready:
+				handler.OnReady(payload.Ready.GetDeviceId(), payload.Ready.GetBusId())
+			case *daemon.USBServerMessage_UrbRequest:
+				handler.OnURBRequest(usbURBRequestFromGRPC(payload.UrbRequest))
+			case *daemon.USBServerMessage_Abort:
+				handler.OnAbort(payload.Abort.GetDeviceId(), int32(payload.Abort.GetEndpoint()))
+			case *daemon.USBServerMessage_Error:
+				handler.OnError(payload.Error.GetDeviceId(), payload.Error.GetMessage())
+			}
+		}
 		if standalone {
 			c.closeConnection()
 		}
