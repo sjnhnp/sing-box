@@ -425,6 +425,19 @@ jobs:
               ;;
             full)
               echo "Using upstream registry files (full mode)..."
+              if [ "${{ matrix.type }}" = "android" ]; then
+                echo "Android target: Syncing necessary Go packages from custom for custom APIs..."
+                for dir in include experimental route option adapter constant common protocol service transport dns log daemon; do
+                  if [ -d "custom/$dir" ]; then
+                    rm -rf "sing-box/$dir"
+                    mkdir -p "sing-box/$dir"
+                    cp -r "custom/$dir"/* "sing-box/$dir/"
+                  fi
+                done
+                cp custom/go.mod sing-box/go.mod || true
+                cp custom/go.sum sing-box/go.sum || true
+                cp custom/box.go sing-box/box.go || true
+              fi
               ;;
             custom)
               echo "Generating custom registry files..."

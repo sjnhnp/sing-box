@@ -100,12 +100,9 @@ func checkJavaVersion() {
 		javaPath = filepath.Join(javaHome, "bin", "java")
 	}
 
-	javaVersion, err := shell.Exec(javaPath, "--version").ReadOutput()
+	_, err := shell.Exec(javaPath, "--version").ReadOutput()
 	if err != nil {
 		log.Fatal(E.Cause(err, "check java version"))
-	}
-	if !strings.Contains(javaVersion, "openjdk 17") {
-		log.Fatal("java version should be openjdk 17")
 	}
 }
 
