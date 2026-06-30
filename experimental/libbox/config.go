@@ -37,9 +37,6 @@ func baseContext(platformInterface PlatformInterface) context.Context {
 	}
 	ctx := context.Background()
 	ctx = filemanager.WithDefault(ctx, sWorkingPath, sTempPath, sUserID, sGroupID)
-	if sOOMReporter != nil {
-		ctx = service.ContextWith[oomkiller.OOMReporter](ctx, sOOMReporter)
-	}
 	return box.Context(ctx, include.InboundRegistry(), include.OutboundRegistry(), include.EndpointRegistry(), dnsRegistry, include.ServiceRegistry(), include.CertificateProviderRegistry())
 }
 

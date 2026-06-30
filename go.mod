@@ -3,6 +3,7 @@ module github.com/sagernet/sing-box
 go 1.24.7
 
 require (
+	filippo.io/age v1.3.1
 	github.com/anthropics/anthropic-sdk-go v1.26.0
 	github.com/anytls/sing-anytls v0.0.11
 	github.com/caddyserver/certmagic v0.25.3-0.20260421143802-60d9d8b415d6
@@ -40,14 +41,15 @@ require (
 	github.com/sagernet/gomobile v0.1.12
 	github.com/sagernet/gvisor v0.0.0-20250811.0-sing-box-mod.1
 	github.com/sagernet/quic-go v0.59.0-sing-box-mod.4
-	github.com/sagernet/sing v0.8.11-0.20260514110501-905ad103a4df
-	github.com/sagernet/sing-cloudflared v0.1.1-0.20260620151903-a1d6358fe953
+	github.com/sagernet/sing v0.8.12-0.20260625092856-31bbf21d4b12
+	github.com/sagernet/sing-cloudflared v0.1.1
 	github.com/sagernet/sing-mux v0.3.5
 	github.com/sagernet/sing-quic v0.6.2-0.20260525051024-9467ede27fb7
 	github.com/sagernet/sing-shadowsocks v0.2.8
 	github.com/sagernet/sing-shadowsocks2 v0.2.1
 	github.com/sagernet/sing-shadowtls v0.2.1
-	github.com/sagernet/sing-tun v0.8.12-0.20260620141852-d8bba3691575
+	github.com/sagernet/sing-tun v0.8.12-0.20260629021427-b3c6babbd353
+	github.com/sagernet/sing-usbip v0.0.0-20260616101517-efb91521eddb
 	github.com/sagernet/sing-vmess v0.2.8-0.20250909125414-3aed155119a1
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1
 	github.com/sagernet/tailscale v1.92.4-sing-box-1.13-mod.7.0.20260527101438-dc40932c32d9
@@ -72,6 +74,7 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/alexbrainman/sspi v0.0.0-20231016080023-1a75b4708caa // indirect
