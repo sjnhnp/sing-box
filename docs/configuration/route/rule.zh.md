@@ -467,6 +467,27 @@ icon: material/new-box
 |-------------|--------------------------------|
 | `tailscale` | 匹配 MagicDNS 域名和对端的 allowed IPs |
 | `wireguard` | 匹配对端的 allowed IPs              |
+| `bridge`    | 匹配除本机本地地址外的所有地址，仅在[预匹配](/zh/configuration/shared/pre-match/)中 |
+
+#### source_mac_address
+
+!!! question "自 sing-box 1.14.0 起"
+
+!!! quote ""
+
+    仅支持 Linux、macOS，或在 Android 和 macOS 图形客户端中支持。参阅 [邻居解析](/configuration/shared/neighbor/) 了解设置方法。
+
+匹配源设备 MAC 地址。
+
+#### source_hostname
+
+!!! question "自 sing-box 1.14.0 起"
+
+!!! quote ""
+
+    仅支持 Linux、macOS，或在 Android 和 macOS 图形客户端中支持。参阅 [邻居解析](/configuration/shared/neighbor/) 了解设置方法。
+
+匹配源设备从 DHCP 租约获取的主机名。
 
 #### source_mac_address
 

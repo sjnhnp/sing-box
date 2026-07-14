@@ -89,6 +89,10 @@ func (s *platformInterfaceStub) OpenInterface(options *tun.Options, platformOpti
 	return nil, os.ErrInvalid
 }
 
+func (s *platformInterfaceStub) ProcessPlatformOptions(options option.TunPlatformOptions) error {
+	return nil
+}
+
 func (s *platformInterfaceStub) UsePlatformDefaultInterfaceMonitor() bool {
 	return true
 }
@@ -182,6 +186,14 @@ func (s *platformInterfaceStub) ReadSystemSSHHostKey() ([]byte, error) {
 
 func (s *platformInterfaceStub) TailscaleHostname() string {
 	return ""
+}
+
+func (s *platformInterfaceStub) UsePlatformBridge() bool {
+	return false
+}
+
+func (s *platformInterfaceStub) CreateBridge(options adapter.BridgeOptions) (adapter.BridgeSession, error) {
+	return nil, os.ErrInvalid
 }
 
 func (s *platformInterfaceStub) LookupUser(username string) (*adapter.PlatformUser, error) {

@@ -1,8 +1,9 @@
 // Package windivert provides a pure-Go binding to the WinDivert kernel
 // driver on Windows (amd64 and 386). User-mode WinDivert calls are
 // reimplemented in Go; only the signed kernel driver is embedded as an
-// asset, since SCM-installed drivers must live on disk and their
-// Authenticode signature forbids modification.
+// asset, since SCM-installed drivers must live on disk. The on-disk copy
+// is verified byte-for-byte against the embedded asset on every install
+// and held open deny-write while the kernel loads it.
 //
 // Administrator is required for the first Open in a process so SCM can
 // load the driver. Upstream: https://github.com/basil00/WinDivert v2.2.2,
@@ -55,9 +56,11 @@ var _ [80]byte = [unsafe.Sizeof(Address{})]byte{}
 
 // Bit positions inside the Address's packed flags word.
 const (
+	addrBitOutbound    = 17
 	addrBitIPv6        = 20
 	addrBitIPChecksum  = 21
 	addrBitTCPChecksum = 22
+	addrBitUDPChecksum = 23
 )
 
 func getFlagBit(bits uint32, pos uint) bool { return bits&(1<<pos) != 0 }
@@ -69,10 +72,26 @@ func setFlagBit(bits uint32, pos uint, v bool) uint32 {
 }
 
 func (a *Address) IPv6() bool { return getFlagBit(a.bits, addrBitIPv6) }
+
+// SetIPv6 declares the address family of a packet built for injection. The
+// driver reads it to select the IPv6 network layer; a received address
+// already carries it, but a from-scratch injection address must set it.
+func (a *Address) SetIPv6(v bool) {
+	a.bits = setFlagBit(a.bits, addrBitIPv6, v)
+}
+
+func (a *Address) SetOutbound(v bool) {
+	a.bits = setFlagBit(a.bits, addrBitOutbound, v)
+}
+
 func (a *Address) SetIPChecksum(v bool) {
 	a.bits = setFlagBit(a.bits, addrBitIPChecksum, v)
 }
 
 func (a *Address) SetTCPChecksum(v bool) {
 	a.bits = setFlagBit(a.bits, addrBitTCPChecksum, v)
+}
+
+func (a *Address) SetUDPChecksum(v bool) {
+	a.bits = setFlagBit(a.bits, addrBitUDPChecksum, v)
 }

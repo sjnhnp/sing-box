@@ -16,6 +16,7 @@ type PlatformInterface interface {
 
 	UsePlatformInterface() bool
 	OpenInterface(options *tun.Options, platformOptions option.TunPlatformOptions) (tun.Tun, error)
+	ProcessPlatformOptions(options option.TunPlatformOptions) error
 
 	UsePlatformDefaultInterfaceMonitor() bool
 	CreateDefaultInterfaceMonitor(logger logger.Logger) tun.DefaultInterfaceMonitor
@@ -51,6 +52,27 @@ type PlatformInterface interface {
 	LookupSFTPServer() (string, error)
 	ReadSystemSSHHostKey() ([]byte, error)
 	TailscaleHostname() string
+
+	UsePlatformBridge() bool
+	CreateBridge(options BridgeOptions) (BridgeSession, error)
+}
+
+type BridgeOptions struct {
+	BridgeName string
+	MTU        uint32
+	Inet4Port  netip.Addr
+	Inet6Port  netip.Addr
+	Interface  string
+	RuleIndex  int
+	RouteTable int
+}
+
+type BridgeSession interface {
+	FileDescriptor() int
+	Name() string
+	Inet6Active() bool
+	SetEgress(interfaceName string) error
+	Close() error
 }
 
 type PlatformUser struct {
