@@ -3,7 +3,7 @@ package main
 import (
 	"errors"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,15 +49,78 @@ var commandServiceUninstall = &cobra.Command{
 	},
 }
 
+var commandServiceSetInsecureMode = &cobra.Command{
+	Use:   "set-insecure-mode <enabled>",
+	Short: "Set whether configurations may use privileges unrelated to networking",
+	Args:  cobra.ExactArgs(1),
+	Run: func(command *cobra.Command, args []string) {
+		err := serviceSetInsecureMode(args[0])
+		if err != nil {
+			log.Fatal(E.Cause(err, "set insecure mode"))
+		}
+	},
+}
+
 func addPlatformServiceCommands() {
 	commandServiceInstall.Flags().BoolVar(
 		&commandServiceFlagAllowUnsafeInstallation,
 		"allow-unsafe-installation-directory-permissions",
 		false,
-		"skip installation path security validation and permission hardening",
+		"allow unsafe installation path security and daemon working directory ancestor permissions",
 	)
 	commandService.AddCommand(commandServiceInstall)
 	commandService.AddCommand(commandServiceUninstall)
+	commandService.AddCommand(commandServiceSetInsecureMode)
+}
+
+func serviceSetInsecureMode(value string) error {
+	enabled, err := strconv.ParseBool(value)
+	if err != nil {
+		return E.Cause(err, "parse value")
+	}
+	if !windows.GetCurrentProcessToken().IsElevated() {
+		return E.New("setting insecure mode requires an elevated process")
+	}
+	directory, err := installedServiceWorkingDirectory()
+	if err != nil {
+		return err
+	}
+	serviceUserID, err := windowsServiceSID()
+	if err != nil {
+		return E.Cause(err, "create daemon service SID")
+	}
+	err = validateProtectedWindowsWorkingDirectory(directory, serviceUserID)
+	if err != nil {
+		return E.Cause(err, "validate working directory")
+	}
+	return saveSecuritySettings(directory, securitySettings{InsecureModeEnabled: enabled})
+}
+
+func installedServiceWorkingDirectory() (string, error) {
+	manager, err := mgr.Connect()
+	if err != nil {
+		return "", E.Cause(err, "connect to service manager")
+	}
+	defer manager.Disconnect()
+	service, err := manager.OpenService(serviceName)
+	if err != nil {
+		return "", E.Cause(err, "open service")
+	}
+	defer service.Close()
+	config, err := service.Config()
+	if err != nil {
+		return "", E.Cause(err, "query service config")
+	}
+	arguments, err := windows.DecomposeCommandLine(config.BinaryPathName)
+	if err != nil {
+		return "", E.Cause(err, "parse service command line")
+	}
+	for index, argument := range arguments {
+		if argument == "--working-directory" && index+1 < len(arguments) {
+			return arguments[index+1], nil
+		}
+	}
+	return "", E.New("missing working directory in the service configuration")
 }
 
 func serviceInstall() error {
@@ -65,19 +128,30 @@ func serviceInstall() error {
 	if err != nil {
 		return E.Cause(err, "get executable path")
 	}
-	if !strings.EqualFold(filepath.Clean(commandServiceFlagWorkingDirectory), filepath.Clean(defaultServiceWorkingDirectory)) {
-		return E.New("the Windows service working directory must be ", defaultServiceWorkingDirectory)
+	serviceWorkingDirectory, err := resolveWindowsServiceWorkingDirectory(
+		commandServiceFlagWorkingDirectory,
+		commandServiceFlagAllowUnsafeInstallation,
+	)
+	if err != nil {
+		return E.Cause(err, "validate working directory")
 	}
 	executablePath, err = secureWindowsInstallation(executablePath, commandServiceFlagAllowUnsafeInstallation)
 	if err != nil {
 		return E.Cause(err, "secure installation")
+	}
+	err = ensureWindowsWorkingDirectory(serviceWorkingDirectory)
+	if err != nil {
+		return E.Cause(err, "secure working directory")
 	}
 	manager, err := mgr.Connect()
 	if err != nil {
 		return E.Cause(err, "connect to service manager")
 	}
 	defer manager.Disconnect()
-	arguments := []string{"run", "--working-directory", defaultServiceWorkingDirectory}
+	arguments := []string{"run", "--working-directory", serviceWorkingDirectory}
+	if commandServiceFlagAllowUnsafeInstallation {
+		arguments = append(arguments, "--allow-unsafe-installation-directory-permissions")
+	}
 	config := mgr.Config{
 		DisplayName:  serviceDisplayName,
 		Description:  serviceDescriptionText,
@@ -131,11 +205,6 @@ func serviceInstall() error {
 	if err != nil {
 		rollback()
 		return E.Cause(err, "secure service")
-	}
-	err = ensureWindowsWorkingDirectory(defaultServiceWorkingDirectory)
-	if err != nil {
-		rollback()
-		return E.Cause(err, "secure working directory")
 	}
 	err = eventlog.InstallAsEventCreate(serviceName, eventlog.Error|eventlog.Warning|eventlog.Info)
 	if err != nil && !strings.Contains(err.Error(), "already exists") {
@@ -271,7 +340,7 @@ func stopServiceAndWait(service *mgr.Service) error {
 }
 
 func waitServiceState(service *mgr.Service, state svc.State) error {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(30 * time.Second)
 	var currentStatus svc.Status
 	for time.Now().Before(timeout) {
 		status, err := service.Query()
@@ -291,8 +360,8 @@ func waitServiceState(service *mgr.Service, state svc.State) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return E.New(
-		"timeout waiting for service state ", state,
-		", current state ", currentStatus.State,
+		"timeout waiting for service state ", uint32(state),
+		", current state ", uint32(currentStatus.State),
 		", process ID ", currentStatus.ProcessId,
 		", Windows exit code ", currentStatus.Win32ExitCode,
 		", service exit code ", currentStatus.ServiceSpecificExitCode,

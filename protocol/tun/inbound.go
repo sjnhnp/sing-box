@@ -42,6 +42,9 @@ type Inbound struct {
 	logger                      log.ContextLogger
 	tunOptions                  tun.Options
 	udpTimeout                  time.Duration
+	udpMapping                  tun.NATMapping
+	udpFiltering                tun.NATFiltering
+	udpNATMax                   uint32
 	dnsHijackAddress            []netip.Addr
 	stack                       string
 	tunIf                       tun.Tun
@@ -230,6 +233,9 @@ func NewInbound(ctx context.Context, router adapter.Router, logger log.ContextLo
 			EXP_MultiPendingPackets:               multiPendingPackets,
 		},
 		udpTimeout:        udpTimeout,
+		udpMapping:        tun.NATMapping(options.UDPMapping),
+		udpFiltering:      tun.NATFiltering(options.UDPFiltering),
+		udpNATMax:         options.UDPNATMax,
 		stack:             options.Stack,
 		platformInterface: platformInterface,
 		platformOptions:   common.PtrValueOrDefault(options.Platform),
@@ -335,7 +341,7 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			outboundManager := service.FromContext[adapter.OutboundManager](t.ctx)
 			endpointManager := service.FromContext[adapter.EndpointManager](t.ctx)
 			for _, outbound := range outboundManager.Outbounds() {
-				if _, isFlowOutbound := outbound.(adapter.FlowOutbound); isFlowOutbound {
+				if _, isFlowOutbound := outbound.(adapter.FlowOutbound); isFlowOutbound && common.Contains(outbound.Network(), N.NetworkTCP) {
 					if C.IsLinux {
 						t.tunOptions.GSO = true
 					} else {
@@ -345,7 +351,7 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 				}
 			}
 			for _, endpoint := range endpointManager.Endpoints() {
-				if _, isFlowOutbound := endpoint.(adapter.FlowOutbound); isFlowOutbound {
+				if _, isFlowOutbound := endpoint.(adapter.FlowOutbound); isFlowOutbound && common.Contains(endpoint.Network(), N.NetworkTCP) {
 					if C.IsLinux {
 						t.tunOptions.GSO = true
 					} else {
@@ -450,6 +456,9 @@ func (t *Inbound) Start(stage adapter.StartStage) error {
 			TunOptions:             t.tunOptions,
 			UDPTimeout:             t.udpTimeout,
 			ICMPTimeout:            C.ICMPTimeout,
+			UDPMapping:             t.udpMapping,
+			UDPFiltering:           t.udpFiltering,
+			UDPNATMax:              t.udpNATMax,
 			Handler:                t,
 			Logger:                 t.logger,
 			ForwarderBindInterface: C.IsDarwin,

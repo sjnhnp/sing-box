@@ -2,6 +2,35 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0-alpha.45
+
+* Improve the Windows client application **1**
+* Fixes and improvements
+
+**1**:
+
+The [Windows client](/clients/desktop/) now includes an updater, adds support
+for Windows native sharing of sing-box profile and JSON files, and fixes the
+Tailscale SSH terminal. The
+[Tailscale SSH server](/configuration/endpoint/tailscale/#ssh_server) can now
+open sessions for any local user in the graphical client, while the command
+line client remains limited to the user sing-box runs as. Additionally,
+configurations that use privileges unrelated to networking are now rejected by
+default; an insecure mode is available to allow them.
+
+#### 1.14.0-alpha.44
+
+* Introducing our [new Windows client application](/clients/desktop/) **1**
+* Fixes and improvements
+
+**1**:
+
+The new [Windows client](/clients/desktop/) provides an experience equal to
+other standard sing-box graphical clients, is available for Windows 10+
+(x64 / x86 / arm64), and is distributed as an installer from
+[GitHub Releases](https://github.com/SagerNet/sing-box/releases)
+(`SFW-<version>-<architecture>.exe`).
+
 #### 1.14.0-alpha.43
 
 * Add network namespace support **1**

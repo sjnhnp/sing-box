@@ -67,7 +67,7 @@ func secureWindowsInstallation(executablePath string, allowUnsafeInstallation bo
 	if err != nil {
 		return "", err
 	}
-	err = validateInstallationAncestors(filepath.Dir(installationDirectory), volumeRoot, true)
+	err = validateInstallationAncestors(filepath.Dir(installationDirectory), volumeRoot, false)
 	if err != nil {
 		return "", err
 	}
@@ -336,11 +336,45 @@ func validateFixedNTFSVolume(path string) (string, error) {
 	return filepath.Clean(volumePath), nil
 }
 
-func validateInstallationAncestors(path string, volumeRoot string, validatePermissions bool) error {
+func resolveWindowsServiceWorkingDirectory(path string, allowUnsafePermissions bool) (string, error) {
+	if path == "" {
+		return "", E.New("missing daemon working directory")
+	}
+	absolutePath, err := filepath.Abs(path)
+	if err != nil {
+		return "", E.Cause(err, "resolve daemon working directory")
+	}
+	cleanPath := filepath.Clean(absolutePath)
+	parentPath := filepath.Dir(cleanPath)
+	parentAttributes, err := windowsFileAttributes(parentPath)
+	if err != nil {
+		return "", E.Cause(err, "query daemon working directory parent")
+	}
+	if parentAttributes&windows.FILE_ATTRIBUTE_DIRECTORY == 0 {
+		return "", E.New("daemon working directory parent is not a directory")
+	}
+	if parentAttributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+		return "", E.New("daemon working directory parent is a reparse point")
+	}
+	volumeRoot, err := validateFixedNTFSVolume(parentPath)
+	if err != nil {
+		return "", E.Cause(err, "validate daemon working directory volume")
+	}
+	if strings.EqualFold(cleanPath, filepath.Clean(volumeRoot)) {
+		return "", E.New("daemon working directory must not be a volume root")
+	}
+	err = validateInstallationAncestors(parentPath, volumeRoot, allowUnsafePermissions)
+	if err != nil {
+		return "", E.Cause(err, "validate daemon working directory ancestors")
+	}
+	return cleanPath, nil
+}
+
+func validateInstallationAncestors(path string, volumeRoot string, allowUnsafePermissions bool) error {
 	currentPath := filepath.Clean(path)
 	cleanVolumeRoot := filepath.Clean(volumeRoot)
 	for {
-		err := validateInstallationAncestor(currentPath, validatePermissions)
+		err := validateInstallationAncestor(currentPath, allowUnsafePermissions)
 		if err != nil {
 			return err
 		}
@@ -355,7 +389,7 @@ func validateInstallationAncestors(path string, volumeRoot string, validatePermi
 	}
 }
 
-func validateInstallationAncestor(path string, validatePermissions bool) error {
+func validateInstallationAncestor(path string, allowUnsafePermissions bool) error {
 	attributes, err := windowsFileAttributes(path)
 	if err != nil {
 		return err
@@ -365,9 +399,6 @@ func validateInstallationAncestor(path string, validatePermissions bool) error {
 	}
 	if attributes&windows.FILE_ATTRIBUTE_REPARSE_POINT != 0 {
 		return E.New("installation ancestor is a reparse point: ", path)
-	}
-	if !validatePermissions {
-		return nil
 	}
 	descriptor, err := windows.GetNamedSecurityInfo(
 		path,
@@ -409,7 +440,7 @@ func validateInstallationAncestor(path string, validatePermissions bool) error {
 			continue
 		}
 		principal := (*windows.SID)(unsafe.Pointer(&accessControlEntry.SidStart))
-		if !trustedAdministrativeUser(principal) {
+		if !trustedAdministrativeUser(principal) && !allowUnsafePermissions {
 			return E.New("installation ancestor is replaceable by an unprivileged principal: ", path)
 		}
 	}
