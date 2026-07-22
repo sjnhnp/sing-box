@@ -99,6 +99,8 @@ nav:
               - mDNS: configuration/dns/server/mdns.md
               - FakeIP: configuration/dns/server/fakeip.md
               - Tailscale: configuration/dns/server/tailscale.md
+              - OpenConnect: configuration/dns/server/openconnect.md
+              - OpenVPN: configuration/dns/server/openvpn.md
               - Resolved: configuration/dns/server/resolved.md
           - DNS Rule: configuration/dns/rule.md
           - DNS Rule Action: configuration/dns/rule_action.md
@@ -151,6 +153,9 @@ nav:
           - configuration/endpoint/index.md
           - WireGuard: configuration/endpoint/wireguard.md
           - Tailscale: configuration/endpoint/tailscale.md
+          - OpenConnect Client: configuration/endpoint/openconnect.md
+          - OpenVPN Client: configuration/endpoint/openvpn-client.md
+          - OpenVPN Server: configuration/endpoint/openvpn-server.md
       - Inbound:
           - configuration/inbound/index.md
           - Direct: configuration/inbound/direct.md

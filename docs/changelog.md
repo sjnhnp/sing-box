@@ -2,6 +2,93 @@
 icon: material/alert-decagram
 ---
 
+#### 1.14.0-alpha.50
+
+* Improve OpenVPN interoperability **1**
+* Improve OpenConnect interoperability **2**
+* Fixes and improvements
+
+**1**:
+
+The OpenVPN client and server now interoperate with more existing deployments
+through static-key mode, additional legacy ciphers and digests, and
+OpenVPN-compatible certificate purpose, key usage, extended key usage, and
+certificate profile checks. They also support more OpenVPN options for tunnel
+addressing, MSS calculation, replay windows, timers, and TLS renegotiation. The
+new [OpenVPN DNS server](/configuration/dns/server/openvpn/) can use both modern
+and legacy DNS options pushed by OpenVPN servers, while the sing-box server can
+push both forms.
+
+**2**:
+
+The OpenConnect client now supports existing authentication sessions, OIDC
+Bearer authentication, additional platform and AnyConnect mobile identity
+fields, AnyConnect compression, and controls for MTU, DPD and reconnect timing,
+TCP keep alive, and TLS trust and certificate pinning. The new
+[OpenConnect DNS server](/configuration/dns/server/openconnect/) can use pushed
+split-DNS resolvers and, when enabled, general pushed resolvers.
+
+#### 1.14.0-alpha.48
+
+* Add SSO support for AnyConnect **1**
+* Add Linux support for the [desktop client application](/clients/desktop/) **2**
+* Fixes and improvements
+
+**1**:
+
+The [OpenConnect Client](/configuration/endpoint/openconnect/) endpoint now
+supports SSO (single sign-on) authentication for Cisco AnyConnect servers,
+available through the sing-box graphical clients.
+
+**2**:
+
+The [sing-box for Desktop](/clients/desktop/) client is now available for Linux
+(x64 / arm64 / armv7l) from
+[GitHub Releases](https://github.com/SagerNet/sing-box/releases).
+
+#### 1.14.0-alpha.47
+
+* Add OpenVPN client and server support **1**
+* Add OpenConnect client support **2**
+* Fixes and improvements
+
+**1**:
+
+The new [OpenVPN Client](/configuration/endpoint/openvpn-client/) and
+[OpenVPN Server](/configuration/endpoint/openvpn-server/) endpoints are
+compatible with standard OpenVPN clients and servers. Interactive client
+authentication is available through the sing-box graphical clients and
+[Dashboard](https://github.com/SagerNet/sing-box-dashboard).
+
+**2**:
+
+The new [OpenConnect Client](/configuration/endpoint/openconnect/) endpoint
+supports Cisco AnyConnect, GlobalProtect, Fortinet, F5, Pulse Connect Secure,
+and Juniper Network Connect VPN servers. Interactive authentication is
+available through the sing-box graphical clients and
+[Dashboard](https://github.com/SagerNet/sing-box-dashboard).
+
+#### 1.14.0-alpha.46
+
+* Add multiple tags support to rule-sets **1**
+* Add new UDP NAT options **2**
+* Fixes and improvements
+
+**1**:
+
+The rule-set [`tag`](/configuration/rule-set/#tag) field now accepts a list of
+tags to define multiple rule-sets sharing other options at once, with the
+`{tag}` placeholder in `path` or `url` replaced by each tag.
+
+**2**:
+
+The new [UDP NAT](/configuration/shared/udp-nat/) fields
+[`udp_mapping`](/configuration/shared/udp-nat/#udp_mapping),
+[`udp_filtering`](/configuration/shared/udp-nat/#udp_filtering) and
+[`udp_nat_max`](/configuration/shared/udp-nat/#udp_nat_max) configure the NAT
+mapping and filtering behaviors and the maximum number of UDP NAT sessions for
+TUN and TProxy inbounds and the WireGuard endpoint.
+
 #### 1.14.0-alpha.45
 
 * Improve the Windows client application **1**
