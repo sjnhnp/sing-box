@@ -47,7 +47,7 @@ icon: material/alert-decagram
     "token": "",
     "realm_id": "",
     "stun_servers": [],
-    "stun_domain_resolver": "", // or {}
+    "stun_domain_resolver": "", // or [] or {}
     "ip_version": 0,
     "port_mapping": {
       "enabled": false,
@@ -239,7 +239,7 @@ Set domain resolver to use for resolving STUN server domain names.
 
 This option uses the same format as the [route DNS rule action](/configuration/dns/rule_action/#route) without the `action` field.
 
-Setting this option directly to a string is equivalent to setting `server` of this options.
+Setting this option directly to a string or list is equivalent to setting its `server` field.
 
 If empty, the default domain resolver is used.
 

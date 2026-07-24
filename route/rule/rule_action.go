@@ -129,9 +129,14 @@ func NewDNSRuleAction(logger logger.ContextLogger, action option.DNSRuleAction) 
 	case "":
 		return nil
 	case C.RuleActionTypeRoute:
+		serverStrategy := action.RouteOptions.ServerStrategy
+		if serverStrategy == "" {
+			serverStrategy = C.DNSServerStrategyFallback
+		}
 		return &RuleActionDNSRoute{
-			Server:      action.RouteOptions.Server,
-			Speculative: action.RouteOptions.Speculative,
+			Servers:        action.RouteOptions.Server,
+			ServerStrategy: serverStrategy,
+			Speculative:    action.RouteOptions.Speculative,
 			RuleActionDNSRouteOptions: RuleActionDNSRouteOptions{
 				Strategy:               C.DomainStrategy(action.RouteOptions.Strategy),
 				Timeout:                time.Duration(action.RouteOptions.Timeout),
@@ -142,9 +147,13 @@ func NewDNSRuleAction(logger logger.ContextLogger, action option.DNSRuleAction) 
 			},
 		}
 	case C.RuleActionTypeEvaluate:
+		evaluateTag := action.EvaluateOptions.Tag
+		if evaluateTag == "" {
+			evaluateTag = action.EvaluateOptions.Server
+		}
 		return &RuleActionEvaluate{
 			Server:      action.EvaluateOptions.Server,
-			Tag:         action.EvaluateOptions.Tag,
+			Tag:         evaluateTag,
 			Speculative: action.EvaluateOptions.Speculative,
 			RuleActionDNSRouteOptions: RuleActionDNSRouteOptions{
 				Strategy:               C.DomainStrategy(action.EvaluateOptions.Strategy),
@@ -290,8 +299,9 @@ func (r *RuleActionRouteOptions) Descriptions() []string {
 }
 
 type RuleActionDNSRoute struct {
-	Server      string
-	Speculative bool
+	Servers        []string
+	ServerStrategy string
+	Speculative    bool
 	RuleActionDNSRouteOptions
 }
 
@@ -300,7 +310,11 @@ func (r *RuleActionDNSRoute) Type() string {
 }
 
 func (r *RuleActionDNSRoute) String() string {
-	return formatDNSRouteAction("route", r.Server, r.Speculative, r.RuleActionDNSRouteOptions)
+	descriptions := []string{strings.Join(r.Servers, " ")}
+	if len(r.Servers) > 1 {
+		descriptions = append(descriptions, r.ServerStrategy)
+	}
+	return formatDNSRouteAction("route", descriptions, r.Speculative, r.RuleActionDNSRouteOptions)
 }
 
 type RuleActionEvaluate struct {
@@ -315,7 +329,11 @@ func (r *RuleActionEvaluate) Type() string {
 }
 
 func (r *RuleActionEvaluate) String() string {
-	return formatDNSRouteAction("evaluate", r.Server, r.Speculative, r.RuleActionDNSRouteOptions)
+	descriptions := []string{r.Server}
+	if r.Tag != r.Server {
+		descriptions = append(descriptions, F.ToString("tag=", r.Tag))
+	}
+	return formatDNSRouteAction("evaluate", descriptions, r.Speculative, r.RuleActionDNSRouteOptions)
 }
 
 type RuleActionRespond struct{}
@@ -328,9 +346,7 @@ func (r *RuleActionRespond) String() string {
 	return "respond"
 }
 
-func formatDNSRouteAction(action string, server string, speculative bool, options RuleActionDNSRouteOptions) string {
-	var descriptions []string
-	descriptions = append(descriptions, server)
+func formatDNSRouteAction(action string, descriptions []string, speculative bool, options RuleActionDNSRouteOptions) string {
 	if speculative {
 		descriptions = append(descriptions, "speculative")
 	}

@@ -5,6 +5,8 @@ icon: material/alert-decagram
 #### 1.14.0-beta.2
 
 * Add [JSON Schema](/configuration/schema/) support **1**
+* Simplify and improve parallel DNS support **2**
+* Refactor DNS response evaluation configuration **3**
 * Fixes and improvements
 
 **1**:
@@ -17,6 +19,26 @@ binary and its build tags.
 
 We have also improved the JSON editor experience in the graphical clients on
 macOS, Android, Windows, and Linux, and added schema-based completion support.
+
+**2**:
+
+Parallel DNS support for common use cases no longer requires combining
+`evaluate` and response matching rules. The DNS
+[`final`](/configuration/dns/#final) field, DNS rule action
+[`server`](/configuration/dns/rule_action/#server) field, and
+[`domain_resolver`](/configuration/shared/dial/#domain_resolver) now accept
+multiple servers directly. The new
+[`final_strategy`](/configuration/dns/#final_strategy) and
+[`server_strategy`](/configuration/dns/rule_action/#server_strategy) fields
+provide `fallback` and `hybrid` modes, with improved fallback behavior.
+
+**3**:
+
+[`match_response`](/configuration/dns/rule/#match_response) now selects an
+evaluated response by tag and no longer accepts a boolean value. If an
+[`evaluate`](/configuration/dns/rule_action/#evaluate) action does not specify
+a `tag`, its server tag is used. The `respond` action now requires
+`match_response` and is no longer supported on logical rules.
 
 #### 1.14.0-beta.1
 

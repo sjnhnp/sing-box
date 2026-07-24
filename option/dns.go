@@ -16,15 +16,38 @@ import (
 )
 
 type RawDNSOptions struct {
-	Servers        []DNSServerOptions `json:"servers,omitempty"`
-	Rules          []DNSRule          `json:"rules,omitempty"`
-	Final          string             `json:"final,omitempty" reference:"dns_server"`
-	ReverseMapping bool               `json:"reverse_mapping,omitempty"`
+	Servers        []DNSServerOptions         `json:"servers,omitempty"`
+	Rules          []DNSRule                  `json:"rules,omitempty"`
+	Final          badoption.Listable[string] `json:"final,omitempty" reference:"dns_server"`
+	FinalStrategy  string                     `json:"final_strategy,omitempty" enum:"fallback,hybrid"`
+	ReverseMapping bool                       `json:"reverse_mapping,omitempty"`
 	DNSClientOptions
 }
 
 type DNSOptions struct {
 	RawDNSOptions
+}
+
+func ValidateDNSServerList(servers []string, strategy string) error {
+	switch strategy {
+	case "", C.DNSServerStrategyFallback, C.DNSServerStrategyHybrid:
+	default:
+		return E.New("unknown server strategy: ", strategy)
+	}
+	if strategy != "" && len(servers) < 2 {
+		return E.New("`server_strategy` requires multiple servers")
+	}
+	seenServers := make(map[string]bool, len(servers))
+	for _, server := range servers {
+		if server == "" {
+			return E.New("empty server tag")
+		}
+		if seenServers[server] {
+			return E.New("duplicate server tag: ", server)
+		}
+		seenServers[server] = true
+	}
+	return nil
 }
 
 const (

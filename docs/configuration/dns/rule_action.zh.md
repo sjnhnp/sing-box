@@ -10,7 +10,9 @@ icon: material/new-box
     :material-plus: [disable_optimistic_cache](#disable_optimistic_cache)  
     :material-plus: [timeout](#timeout)  
     :material-plus: [race](#race)  
-    :material-plus: [speculative](#speculative)
+    :material-plus: [speculative](#speculative)  
+    :material-alert: [server](#server)  
+    :material-plus: [server_strategy](#server_strategy)
 
 !!! quote "sing-box 1.12.0 中的更改"
 
@@ -54,7 +56,8 @@ icon: material/new-box
 ```json
 {
   "action": "route", // 默认
-  "server": "",
+  "server": "", // 或 []
+  "server_strategy": "",
   "speculative": false,
   "strategy": "",
   "disable_cache": false,
@@ -71,11 +74,26 @@ icon: material/new-box
 
 ==必填==
 
-目标 DNS 服务器的标签。
+目标 DNS 服务器的标签或目标 DNS 服务器标签列表。
+
+#### server_strategy
+
+!!! question "自 sing-box 1.14.0 起"
+
+配置多个 DNS 服务器时使用的选择策略。
+
+可选值：
+
+- `fallback`：按顺序使用服务器，并在需要时回退到后续服务器。
+- `hybrid`：同时查询多个服务器，并采用最先可用的结果。
+
+默认使用 `fallback`。
 
 #### speculative
 
 !!! question "自 sing-box 1.14.0 起"
+
+仅当 `server` 包含一个服务器时可用。
 
 与 `race` 冲突。没有前序竞态规则时无效果。
 
@@ -160,8 +178,9 @@ icon: material/new-box
 
 已评估响应的标签。
 
-带标签的响应仅能通过 [`match_response`](/zh/configuration/dns/rule/#match_response) 以标签引用；
-`match_response: true` 引用最近一条无 `tag` 的 `evaluate` 动作的响应。
+如果为空，则使用服务器标签。
+
+后续规则可以通过 [`match_response`](/zh/configuration/dns/rule/#match_response) 引用该响应。
 
 #### speculative
 
@@ -209,15 +228,19 @@ icon: material/new-box
 
 ```json
 {
+  "match_response": "",
   "action": "respond"
 }
 ```
 
-`respond` 会终止规则评估，并直接返回前序 [`evaluate`](/zh/configuration/dns/rule_action/#evaluate) 动作保存的已评估的响应。
+`respond` 会终止规则评估，并返回
+[`match_response`](/zh/configuration/dns/rule/#match_response) 选中的已评估响应。
 
 此动作不会发起新的 DNS 查询。
 
-只能用于前面已有顶层 `evaluate` 规则的场景。如果运行时命中该动作时没有已评估的响应，则请求会直接返回错误，而不是继续匹配后续规则。
+仅可用于非 logical 规则，且前面必须存在顶层 [`evaluate`](#evaluate) 规则。
+
+如果选中的响应不可用，则请求会直接返回错误，而不是继续匹配后续规则。
 
 ### route-options
 

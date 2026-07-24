@@ -182,7 +182,7 @@ icon: material/alert-decagram
           "geosite-cn"
         ],
         "rule_set_ip_cidr_match_source": false,
-        "match_response": false,
+        "match_response": "",
         "ip_cidr": [
           "10.0.0.0/24",
           "192.168.0.1"
@@ -550,11 +550,12 @@ Available values: `wifi`, `cellular`, `ethernet` and `other`.
 
 !!! question "自 sing-box 1.14.0 起"
 
-启用响应匹配。启用后，此规则将匹配已评估的响应（由前序 [`evaluate`](/zh/configuration/dns/rule_action/#evaluate) 动作设置），而不仅是匹配原始查询。
+要匹配的已评估响应的标签。
 
-可以为 `true` 或 `evaluate` 动作的 `tag`：`true` 匹配最近一条无 `tag` 的 `evaluate` 动作的响应；标签则匹配对应 `evaluate` 动作的响应。
+该标签必须由前序顶层 [`evaluate`](/zh/configuration/dns/rule_action/#evaluate) 动作定义。
+如果 `evaluate` 动作未指定标签，则使用其服务器标签。
 
-该已评估的响应也可以被后续的 [`respond`](/zh/configuration/dns/rule_action/#respond) 动作直接返回；在带 `match_response` 标签的规则中，`respond` 返回该标签的响应。
+该已评估响应也可以通过 [`respond`](/zh/configuration/dns/rule_action/#respond) 动作直接返回。
 
 响应匹配字段（`response_rcode`、`response_answer`、`response_ns`、`response_extra`）需要此选项。
 当与 `evaluate` 或响应匹配字段一起使用时，`ip_cidr`、`ip_is_private` 和 `ip_accept_any` 也需要此选项。
@@ -668,8 +669,9 @@ Available values: `wifi`, `cellular`, `ethernet` and `other`.
 
 !!! question "自 sing-box 1.14.0 起"
 
-已评估的响应的匹配字段。需要将 `match_response` 设为 `true`，
-且需要前序规则使用 [`evaluate`](/zh/configuration/dns/rule_action/#evaluate) 动作来填充响应。
+与 `match_response` 选中的已评估响应进行匹配的字段。
+
+需要前序规则使用 [`evaluate`](/zh/configuration/dns/rule_action/#evaluate) 动作来填充响应。
 
 该已评估的响应也可以被后续的 [`respond`](/zh/configuration/dns/rule_action/#respond) 动作直接返回。
 
