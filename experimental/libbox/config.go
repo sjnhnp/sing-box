@@ -23,6 +23,7 @@ import (
 	"github.com/sagernet/sing/common/x/list"
 	"github.com/sagernet/sing/service"
 	"github.com/sagernet/sing/service/filemanager"
+	"github.com/sagernet/sing-box/service/oomkiller"
 )
 
 var sOOMReporter oomkiller.OOMReporter
