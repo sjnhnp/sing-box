@@ -20,8 +20,8 @@ func NewTransportAdapter(transportType string, transportTag string, dependencies
 
 func NewTransportAdapterWithLocalOptions(transportType string, transportTag string, localOptions option.LocalDNSServerOptions) TransportAdapter {
 	var dependencies []string
-	if localOptions.DomainResolver != nil && localOptions.DomainResolver.Server != "" {
-		dependencies = append(dependencies, localOptions.DomainResolver.Server)
+	if localOptions.DomainResolver != nil {
+		dependencies = append(dependencies, localOptions.DomainResolver.Server...)
 	}
 	return TransportAdapter{
 		transportType: transportType,
@@ -32,8 +32,8 @@ func NewTransportAdapterWithLocalOptions(transportType string, transportTag stri
 
 func NewTransportAdapterWithRemoteOptions(transportType string, transportTag string, remoteOptions option.RemoteDNSServerOptions) TransportAdapter {
 	var dependencies []string
-	if remoteOptions.DomainResolver != nil && remoteOptions.DomainResolver.Server != "" {
-		dependencies = append(dependencies, remoteOptions.DomainResolver.Server)
+	if remoteOptions.DomainResolver != nil {
+		dependencies = append(dependencies, remoteOptions.DomainResolver.Server...)
 	}
 	return TransportAdapter{
 		transportType: transportType,

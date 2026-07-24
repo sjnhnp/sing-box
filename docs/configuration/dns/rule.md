@@ -182,7 +182,7 @@ icon: material/alert-decagram
           "geosite-cn"
         ],
         "rule_set_ip_cidr_match_source": false,
-        "match_response": false,
+        "match_response": "",
         "ip_cidr": [
           "10.0.0.0/24",
           "192.168.0.1"
@@ -558,15 +558,14 @@ Make `ip_cidr` rule items in rule-sets match the source IP.
 
 !!! question "Since sing-box 1.14.0"
 
-Enable response-based matching. When enabled, this rule matches against the evaluated response
-(set by a preceding [`evaluate`](/configuration/dns/rule_action/#evaluate) action)
-instead of only matching the original query.
+Tag of the evaluated response to match.
 
-`true` or the `tag` of an `evaluate` action: `true` matches against the response of the latest
-`evaluate` action without `tag`; a tag matches against the response of the `evaluate` action with the tag.
+The tag must be defined by a preceding top-level
+[`evaluate`](/configuration/dns/rule_action/#evaluate) action.
+If the `evaluate` action does not specify a tag, its server tag is used.
 
-The evaluated response can also be returned directly by a later [`respond`](/configuration/dns/rule_action/#respond) action;
-in a rule with a `match_response` tag, `respond` returns the tagged response.
+The evaluated response can also be returned directly with the
+[`respond`](/configuration/dns/rule_action/#respond) action.
 
 Required for Response Match Fields (`response_rcode`, `response_answer`, `response_ns`, `response_extra`).
 Also required for `ip_cidr`, `ip_is_private`, and `ip_accept_any` when used with `evaluate` or Response Match Fields.
@@ -679,8 +678,10 @@ Make `ip_cidr` rules in rule-sets accept empty query response.
 
 !!! question "Since sing-box 1.14.0"
 
-Match fields for the evaluated response. Require `match_response` to be set to `true`
-and a preceding rule with [`evaluate`](/configuration/dns/rule_action/#evaluate) action to populate the response.
+Match fields for the evaluated response selected by `match_response`.
+
+Require a preceding rule with [`evaluate`](/configuration/dns/rule_action/#evaluate) action
+to populate the response.
 
 That evaluated response may also be returned directly by a later [`respond`](/configuration/dns/rule_action/#respond) action.
 

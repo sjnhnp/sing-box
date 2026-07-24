@@ -36,14 +36,14 @@ type resolveDialer struct {
 	router        adapter.DNSRouter
 	dialer        N.Dialer
 	parallel      bool
-	server        string
+	servers       []string
 	initOnce      sync.Once
 	initErr       error
 	queryOptions  adapter.DNSQueryOptions
 	fallbackDelay time.Duration
 }
 
-func NewResolveDialer(ctx context.Context, dialer N.Dialer, parallel bool, server string, queryOptions adapter.DNSQueryOptions, fallbackDelay time.Duration) ResolveDialer {
+func NewResolveDialer(ctx context.Context, dialer N.Dialer, parallel bool, servers []string, queryOptions adapter.DNSQueryOptions, fallbackDelay time.Duration) ResolveDialer {
 	if parallelDialer, isParallel := dialer.(ParallelInterfaceDialer); isParallel {
 		return &resolveParallelNetworkDialer{
 			resolveDialer{
@@ -51,7 +51,7 @@ func NewResolveDialer(ctx context.Context, dialer N.Dialer, parallel bool, serve
 				router:        service.FromContext[adapter.DNSRouter](ctx),
 				dialer:        dialer,
 				parallel:      parallel,
-				server:        server,
+				servers:       servers,
 				queryOptions:  queryOptions,
 				fallbackDelay: fallbackDelay,
 			},
@@ -63,7 +63,7 @@ func NewResolveDialer(ctx context.Context, dialer N.Dialer, parallel bool, serve
 		router:        service.FromContext[adapter.DNSRouter](ctx),
 		dialer:        dialer,
 		parallel:      parallel,
-		server:        server,
+		servers:       servers,
 		queryOptions:  queryOptions,
 		fallbackDelay: fallbackDelay,
 	}
@@ -80,15 +80,25 @@ func (d *resolveDialer) initialize() error {
 }
 
 func (d *resolveDialer) initServer() {
-	if d.server == "" {
+	if len(d.servers) == 0 {
 		return
 	}
-	transport, loaded := d.transport.Transport(d.server)
-	if !loaded {
-		d.initErr = E.New("domain resolver not found: " + d.server)
-		return
+	transports := make([]adapter.DNSTransport, 0, len(d.servers))
+	for _, server := range d.servers {
+		transport, loaded := d.transport.Transport(server)
+		if !loaded {
+			d.initErr = E.New("domain resolver not found: ", server)
+			return
+		}
+		transports = append(transports, transport)
 	}
-	d.queryOptions.Transport = transport
+	if len(transports) == 1 {
+		d.queryOptions.Transport = transports[0]
+		d.queryOptions.Transports = nil
+	} else {
+		d.queryOptions.Transport = nil
+		d.queryOptions.Transports = transports
+	}
 }
 
 func (d *resolveDialer) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {

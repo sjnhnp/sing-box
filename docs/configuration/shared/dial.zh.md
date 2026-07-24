@@ -47,7 +47,7 @@ icon: material/new-box
   "tcp_keep_alive_interval": "",
   "udp_fragment": false,
 
-  "domain_resolver": "", // 或 {}
+  "domain_resolver": "", // 或 [] 或 {}
   "network_strategy": "",
   "network_type": [],
   "fallback_network_type": [],
@@ -183,7 +183,9 @@ TCP keep alive 间隔。
 
 此选项的格式与 [路由 DNS 规则动作](/zh/configuration/dns/rule_action/#route) 相同，但不包含 `action` 字段。  
 
-若直接将此选项设置为字符串，则等同于设置该选项的 `server` 字段。
+`server` 字段接受单个 DNS 服务器标签或标签列表，`server_strategy` 控制多个服务器的选择方式。
+
+若直接将此选项设置为字符串或列表，则等同于设置该选项的 `server` 字段。
 
 | 出站/端点       | 受影响的域名                |
 |----------------|---------------------------|

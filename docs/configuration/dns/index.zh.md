@@ -6,7 +6,9 @@ icon: material/alert-decagram
 
     :material-delete-clock: [independent_cache](#independent_cache)  
     :material-plus: [optimistic](#optimistic)  
-    :material-plus: [timeout](#timeout)
+    :material-plus: [timeout](#timeout)  
+    :material-alert: [final](#final)  
+    :material-plus: [final_strategy](#final_strategy)
 
 !!! quote "sing-box 1.12.0 中的更改"
 
@@ -25,7 +27,8 @@ icon: material/alert-decagram
   "dns": {
     "servers": [],
     "rules": [],
-    "final": "",
+    "final": "", // 或 []
+    "final_strategy": "",
     "strategy": "",
     "disable_cache": false,
     "disable_expire": false,
@@ -50,9 +53,24 @@ icon: material/alert-decagram
 
 #### final
 
-默认 DNS 服务器的标签。
+默认 DNS 服务器的标签或服务器标签列表。
 
 默认使用第一个服务器。
+
+配置多个服务器时，由 `final_strategy` 决定如何选择服务器。
+
+#### final_strategy
+
+!!! question "自 sing-box 1.14.0 起"
+
+配置多个 `final` DNS 服务器时使用的选择策略。
+
+可选值：
+
+- `fallback`：按顺序使用服务器，并在需要时回退到后续服务器。
+- `hybrid`：同时查询多个服务器，并采用最先可用的结果。
+
+默认使用 `fallback`。
 
 #### strategy
 

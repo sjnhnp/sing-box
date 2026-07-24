@@ -37,7 +37,7 @@ type NetworkManager interface {
 type NetworkOptions struct {
 	BindInterface        string
 	RoutingMark          uint32
-	DomainResolver       string
+	DomainResolvers      []string
 	DomainResolveOptions DNSQueryOptions
 	NetworkStrategy      *C.NetworkStrategy
 	NetworkType          []C.InterfaceType

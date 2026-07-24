@@ -33,6 +33,11 @@ const (
 )
 
 const (
+	DNSServerStrategyFallback = "fallback"
+	DNSServerStrategyHybrid   = "hybrid"
+)
+
+const (
 	DNSProviderAliDNS     = "alidns"
 	DNSProviderCloudflare = "cloudflare"
 	DNSProviderACMEDNS    = "acmedns"

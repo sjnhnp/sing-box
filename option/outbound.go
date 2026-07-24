@@ -2,8 +2,10 @@ package option
 
 import (
 	"context"
+	"reflect"
 
 	C "github.com/sagernet/sing-box/constant"
+	"github.com/sagernet/sing-box/schema"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
 	"github.com/sagernet/sing/common/json/badjson"
@@ -13,6 +15,7 @@ import (
 )
 
 type OutboundOptionsRegistry interface {
+	OptionTypes() []string
 	CreateOptions(outboundType string) (any, bool)
 }
 
@@ -59,13 +62,27 @@ func (h *Outbound) UnmarshalJSONContext(ctx context.Context, content []byte) err
 	return nil
 }
 
+func (h Outbound) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+	return builder.Define("Outbound", func() (*schema.Node, error) {
+		registry := service.FromContext[OutboundOptionsRegistry](builder.Context())
+		if registry == nil {
+			return nil, E.New("missing outbound options registry in context")
+		}
+		return registryUnion(builder, registry, []string{C.TypeShadowsocksR, C.TypeWireGuard}, true)
+	})
+}
+
 type DialerOptionsWrapper interface {
 	TakeDialerOptions() DialerOptions
 	ReplaceDialerOptions(options DialerOptions)
 }
 
 type DialerOptions struct {
-	Detour                     string                            `json:"detour,omitempty"`
+	Detour string `json:"detour,omitempty" reference:"outbound"`
+	AbstractDialerOptions
+}
+
+type AbstractDialerOptions struct {
 	BindInterface              string                            `json:"bind_interface,omitempty"`
 	Inet4BindAddress           *badoption.Addr                   `json:"inet4_bind_address,omitempty"`
 	Inet6BindAddress           *badoption.Addr                   `json:"inet6_bind_address,omitempty"`
@@ -73,7 +90,7 @@ type DialerOptions struct {
 	ProtectPath                string                            `json:"protect_path,omitempty"`
 	RoutingMark                FwMark                            `json:"routing_mark,omitempty"`
 	ReuseAddr                  bool                              `json:"reuse_addr,omitempty"`
-	NetNs                      string                            `json:"netns,omitempty"`
+	NetNs                      string                            `json:"netns,omitempty" reference:"network_namespace"`
 	ConnectTimeout             badoption.Duration                `json:"connect_timeout,omitempty"`
 	TCPFastOpen                bool                              `json:"tcp_fast_open,omitempty"`
 	TCPMultiPath               bool                              `json:"tcp_multi_path,omitempty"`
@@ -91,25 +108,27 @@ type DialerOptions struct {
 	FallbackDelay              badoption.Duration                `json:"fallback_delay,omitempty"`
 
 	// Deprecated: migrated to domain resolver
-	DomainStrategy DomainStrategy `json:"domain_strategy,omitempty"`
+	DomainStrategy DomainStrategy `json:"domain_strategy,omitempty" schema:"omit"`
 }
 
 type _DomainResolveOptions struct {
-	Server                 string                `json:"server"`
-	Timeout                badoption.Duration    `json:"timeout,omitempty"`
-	Strategy               DomainStrategy        `json:"strategy,omitempty"`
-	DisableCache           bool                  `json:"disable_cache,omitempty"`
-	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
-	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
-	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
+	Server                 badoption.Listable[string] `json:"server" reference:"dns_server"`
+	ServerStrategy         string                     `json:"server_strategy,omitempty" enum:"fallback,hybrid"`
+	Timeout                badoption.Duration         `json:"timeout,omitempty"`
+	Strategy               DomainStrategy             `json:"strategy,omitempty"`
+	DisableCache           bool                       `json:"disable_cache,omitempty"`
+	DisableOptimisticCache bool                       `json:"disable_optimistic_cache,omitempty"`
+	RewriteTTL             *uint32                    `json:"rewrite_ttl,omitempty"`
+	ClientSubnet           *badoption.Prefixable      `json:"client_subnet,omitempty"`
 }
 
 type DomainResolveOptions _DomainResolveOptions
 
 func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
-	if o.Server == "" {
+	if len(o.Server) == 0 {
 		return []byte("{}"), nil
-	} else if o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
+	} else if o.ServerStrategy == "" &&
+		o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
 		o.Timeout == 0 &&
 		!o.DisableCache &&
 		!o.DisableOptimisticCache &&
@@ -121,21 +140,38 @@ func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func (o *DomainResolveOptions) UnmarshalJSON(bytes []byte) error {
-	var stringValue string
-	err := json.Unmarshal(bytes, &stringValue)
+func (o *DomainResolveOptions) UnmarshalJSON(content []byte) error {
+	var serverValue badoption.Listable[string]
+	err := json.Unmarshal(content, &serverValue)
 	if err == nil {
-		o.Server = stringValue
-		return nil
+		if len(serverValue) == 1 && serverValue[0] == "" {
+			serverValue = nil
+		}
+		o.Server = serverValue
+		return ValidateDNSServerList(o.Server, "")
 	}
-	err = json.Unmarshal(bytes, (*_DomainResolveOptions)(o))
+	err = json.Unmarshal(content, (*_DomainResolveOptions)(o))
 	if err != nil {
 		return err
 	}
-	if o.Server == "" {
+	if len(o.Server) == 0 {
 		return E.New("empty domain_resolver.server")
 	}
-	return nil
+	return ValidateDNSServerList(o.Server, o.ServerStrategy)
+}
+
+func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+	return builder.Define("DomainResolver", func() (*schema.Node, error) {
+		objectForm := schema.StrictObject()
+		err := builder.FlattenStruct(objectForm, reflect.TypeFor[DomainResolveOptions]())
+		if err != nil {
+			return nil, err
+		}
+		objectForm.Required = []string{"server"}
+		serverForm := schema.ListableOf(schema.TagReferenceNode("dns_server"))
+		serverForm.AnyOf = append(serverForm.AnyOf, objectForm)
+		return serverForm, nil
+	})
 }
 
 func (o *DialerOptions) TakeDialerOptions() DialerOptions {
