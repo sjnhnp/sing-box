@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sagernet/sing-box/log"
@@ -35,6 +34,7 @@ func updateMozillaIncludedRootCAs() error {
 	if err != nil {
 		return err
 	}
+	nameIndex := slices.Index(header, "Certificate Name")
 	geoIndex := slices.Index(header, "Geographic Focus")
 	certIndex := slices.Index(header, "PEM Info")
 
@@ -112,6 +112,7 @@ func updateChromeIncludedRootCAs() error {
 		return err
 	}
 	statusIndex := slices.Index(header, "Google Chrome Status")
+	subjectIndex := slices.Index(header, "Subject")
 	certIndex := slices.Index(header, "X.509 Certificate (PEM)")
 	fingerprintIndex := slices.Index(header, "SHA-256 Fingerprint")
 
