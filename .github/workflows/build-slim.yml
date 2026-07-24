@@ -408,7 +408,7 @@ jobs:
               export PROTO_SSH=false
               export PROTO_TOR=false
               echo "Syncing necessary Go packages from custom..."
-              for dir in include experimental route option adapter constant common protocol service transport dns log daemon; do
+              for dir in include experimental route option adapter constant common protocol service transport dns log daemon schema; do
                 if [ -d "custom/$dir" ]; then
                   rm -rf "sing-box/$dir"
                   mkdir -p "sing-box/$dir"
@@ -427,7 +427,7 @@ jobs:
               echo "Using upstream registry files (full mode)..."
               if [ "${{ matrix.type }}" = "android" ]; then
                 echo "Android target: Syncing necessary Go packages from custom for custom APIs..."
-                for dir in include experimental route option adapter constant common protocol service transport dns log daemon; do
+                for dir in include experimental route option adapter constant common protocol service transport dns log daemon schema; do
                   if [ -d "custom/$dir" ]; then
                     rm -rf "sing-box/$dir"
                     mkdir -p "sing-box/$dir"
@@ -442,7 +442,7 @@ jobs:
             custom)
               echo "Generating custom registry files..."
               echo "Syncing necessary Go packages from custom..."
-              for dir in include experimental route option adapter constant common protocol service transport dns log daemon; do
+              for dir in include experimental route option adapter constant common protocol service transport dns log daemon schema; do
                 if [ -d "custom/$dir" ]; then
                   rm -rf "sing-box/$dir"
                   mkdir -p "sing-box/$dir"
@@ -496,7 +496,7 @@ jobs:
               $env:PROTO_TAILSCALE="false"
               $env:PROTO_SSH="false"
               $env:PROTO_TOR="false"
-              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log", "daemon")
+              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log", "daemon", "schema")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
                   if (Test-Path "sing-box/$dir") { Remove-Item -Recurse -Force "sing-box/$dir" }
@@ -518,7 +518,7 @@ jobs:
               Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
               Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
               Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log", "daemon")
+              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log", "daemon", "schema")
               foreach ($dir in $dirs) {
                 if (Test-Path "custom/$dir") {
                   if (Test-Path "sing-box/$dir") { Remove-Item -Recurse -Force "sing-box/$dir" }
