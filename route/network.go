@@ -80,7 +80,6 @@ func NewNetworkManager(ctx context.Context, logger logger.ContextLogger, options
 			RoutingMark:     uint32(options.DefaultMark),
 			DomainResolvers: defaultDomainResolver.Server,
 			DomainResolveOptions: adapter.DNSQueryOptions{
-				ServerStrategy:         defaultDomainResolver.ServerStrategy,
 				Strategy:               C.DomainStrategy(defaultDomainResolver.Strategy),
 				Timeout:                time.Duration(defaultDomainResolver.Timeout),
 				DisableCache:           defaultDomainResolver.DisableCache,

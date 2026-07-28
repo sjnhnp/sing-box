@@ -23,7 +23,9 @@ type DNSRule interface {
 	LegacyPreMatch(metadata *InboundContext) bool
 	WithAddressLimit() bool
 	MatchAddressLimit(metadata *InboundContext, response *dns.Msg) bool
+	MatchResponseTag() string
 	MatchResponseTags() []string
+	MatchResponseAnonymous() bool
 	Race() bool
 }
 

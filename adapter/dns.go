@@ -35,8 +35,6 @@ type DNSClient interface {
 
 type DNSQueryOptions struct {
 	Transport              DNSTransport
-	Transports             []DNSTransport
-	ServerStrategy         string
 	Strategy               C.DomainStrategy
 	LookupStrategy         C.DomainStrategy
 	DisableCache           bool
@@ -47,33 +45,23 @@ type DNSQueryOptions struct {
 }
 
 func DNSQueryOptionsFrom(ctx context.Context, options *option.DomainResolveOptions) (DNSQueryOptions, error) {
-	if options == nil || len(options.Server) == 0 {
+	if options == nil || options.Server == "" {
 		return DNSQueryOptions{}, nil
 	}
 	transportManager := service.FromContext[DNSTransportManager](ctx)
-	transports := make([]DNSTransport, 0, len(options.Server))
-	for _, server := range options.Server {
-		transport, loaded := transportManager.Transport(server)
-		if !loaded {
-			return DNSQueryOptions{}, E.New("domain resolver not found: ", server)
-		}
-		transports = append(transports, transport)
+	transport, loaded := transportManager.Transport(options.Server)
+	if !loaded {
+		return DNSQueryOptions{}, E.New("domain resolver not found: " + options.Server)
 	}
-	queryOptions := DNSQueryOptions{
-		ServerStrategy:         options.ServerStrategy,
+	return DNSQueryOptions{
+		Transport:              transport,
 		Strategy:               C.DomainStrategy(options.Strategy),
 		DisableCache:           options.DisableCache,
 		DisableOptimisticCache: options.DisableOptimisticCache,
 		RewriteTTL:             options.RewriteTTL,
 		Timeout:                time.Duration(options.Timeout),
 		ClientSubnet:           options.ClientSubnet.Build(netip.Prefix{}),
-	}
-	if len(transports) == 1 {
-		queryOptions.Transport = transports[0]
-	} else {
-		queryOptions.Transports = transports
-	}
-	return queryOptions, nil
+	}, nil
 }
 
 type RDRCStore interface {

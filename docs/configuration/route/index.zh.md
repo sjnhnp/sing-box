@@ -47,7 +47,6 @@ icon: material/alert-decagram
     "find_neighbor": false,
     "dhcp_lease_files": [],
     "default_http_client": "",
-    "default_domain_resolver": "", // 或 [] 或 {}
     "default_network_strategy": "",
     "default_fallback_delay": ""
   }

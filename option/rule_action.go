@@ -211,9 +211,8 @@ func (r *RouteOptionsActionOptions) UnmarshalJSON(data []byte) error {
 }
 
 type DNSRouteActionOptions struct {
-	Server         badoption.Listable[string] `json:"server,omitempty" reference:"dns_server"`
-	ServerStrategy string                     `json:"server_strategy,omitempty" enum:"fallback,hybrid"`
-	Speculative    bool                       `json:"speculative,omitempty"`
+	Server      string `json:"server,omitempty" reference:"dns_server"`
+	Speculative bool   `json:"speculative,omitempty"`
 	AbstractDNSRouteActionOptions
 }
 

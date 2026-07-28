@@ -47,7 +47,7 @@ icon: material/alert-decagram
     "token": "",
     "realm_id": "",
     "stun_servers": [],
-    "stun_domain_resolver": "", // 或 [] 或 {}
+    "stun_domain_resolver": "", // 或 {}
     "ip_version": 0,
     "port_mapping": {
       "enabled": false,
@@ -236,7 +236,7 @@ Realm 上的槽位标识符。
 
 此选项的格式与 [路由 DNS 规则动作](/zh/configuration/dns/rule_action/#route) 相同，但不包含 `action` 字段。
 
-若直接将此选项设置为字符串或列表，则等同于设置该选项的 `server` 字段。
+若直接将此选项设置为字符串，则等同于设置该选项的 `server` 字段。
 
 如果为空，则使用默认域名解析器。
 

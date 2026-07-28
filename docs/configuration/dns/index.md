@@ -6,9 +6,7 @@ icon: material/alert-decagram
 
     :material-delete-clock: [independent_cache](#independent_cache)  
     :material-plus: [optimistic](#optimistic)  
-    :material-plus: [timeout](#timeout)  
-    :material-alert: [final](#final)  
-    :material-plus: [final_strategy](#final_strategy)
+    :material-plus: [timeout](#timeout)
 
 !!! quote "Changes in sing-box 1.12.0"
 

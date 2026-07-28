@@ -112,14 +112,13 @@ type AbstractDialerOptions struct {
 }
 
 type _DomainResolveOptions struct {
-	Server                 badoption.Listable[string] `json:"server" reference:"dns_server"`
-	ServerStrategy         string                     `json:"server_strategy,omitempty" enum:"fallback,hybrid"`
-	Timeout                badoption.Duration         `json:"timeout,omitempty"`
-	Strategy               DomainStrategy             `json:"strategy,omitempty"`
-	DisableCache           bool                       `json:"disable_cache,omitempty"`
-	DisableOptimisticCache bool                       `json:"disable_optimistic_cache,omitempty"`
-	RewriteTTL             *uint32                    `json:"rewrite_ttl,omitempty"`
-	ClientSubnet           *badoption.Prefixable      `json:"client_subnet,omitempty"`
+	Server                 string                `json:"server" reference:"dns_server"`
+	Timeout                badoption.Duration    `json:"timeout,omitempty"`
+	Strategy               DomainStrategy        `json:"strategy,omitempty"`
+	DisableCache           bool                  `json:"disable_cache,omitempty"`
+	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
+	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
+	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
 }
 
 type DomainResolveOptions _DomainResolveOptions
@@ -127,8 +126,7 @@ type DomainResolveOptions _DomainResolveOptions
 func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 	if len(o.Server) == 0 {
 		return []byte("{}"), nil
-	} else if o.ServerStrategy == "" &&
-		o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
+	} else if o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
 		o.Timeout == 0 &&
 		!o.DisableCache &&
 		!o.DisableOptimisticCache &&
@@ -171,6 +169,18 @@ func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.No
 		serverForm := schema.ListableOf(schema.TagReferenceNode("dns_server"))
 		serverForm.AnyOf = append(serverForm.AnyOf, objectForm)
 		return serverForm, nil
+	})
+}
+
+func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
+	return builder.Define("DomainResolver", func() (*schema.Node, error) {
+		objectForm := schema.StrictObject()
+		err := builder.FlattenStruct(objectForm, reflect.TypeFor[DomainResolveOptions]())
+		if err != nil {
+			return nil, err
+		}
+		objectForm.Required = []string{"server"}
+		return schema.AnyOf(schema.TagReferenceNode("dns_server"), objectForm), nil
 	})
 }
 

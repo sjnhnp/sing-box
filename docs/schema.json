@@ -848,26 +848,8 @@
           }
         },
         "final": {
-          "anyOf": [
-            {
-              "type": "string",
-              "x-tag-reference": "dns_server"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "x-tag-reference": "dns_server"
-              }
-            }
-          ]
-        },
-        "final_strategy": {
           "type": "string",
-          "enum": [
-            "fallback",
-            "hybrid"
-          ]
+          "x-tag-reference": "dns_server"
         },
         "reverse_mapping": {
           "type": "boolean"
@@ -1544,7 +1526,14 @@
                   "type": "boolean"
                 },
                 "match_response": {
-                  "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
                 },
                 "ip_cidr": {
                   "anyOf": [
@@ -1669,26 +1658,8 @@
               "type": "boolean"
             },
             "server": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "x-tag-reference": "dns_server"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "x-tag-reference": "dns_server"
-                  }
-                }
-              ]
-            },
-            "server_strategy": {
               "type": "string",
-              "enum": [
-                "fallback",
-                "hybrid"
-              ]
+              "x-tag-reference": "dns_server"
             },
             "speculative": {
               "type": "boolean"
@@ -3368,36 +3339,11 @@
           "x-tag-reference": "dns_server"
         },
         {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "x-tag-reference": "dns_server"
-          }
-        },
-        {
           "type": "object",
           "properties": {
             "server": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "x-tag-reference": "dns_server"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "type": "string",
-                    "x-tag-reference": "dns_server"
-                  }
-                }
-              ]
-            },
-            "server_strategy": {
               "type": "string",
-              "enum": [
-                "fallback",
-                "hybrid"
-              ]
+              "x-tag-reference": "dns_server"
             },
             "timeout": {
               "$ref": "#/$defs/Duration"
@@ -9190,7 +9136,14 @@
               "type": "boolean"
             },
             "match_response": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string"
+                }
+              ]
             },
             "ip_cidr": {
               "anyOf": [

@@ -87,7 +87,7 @@ sing-box 1.14.0 新增字段参阅 [ACME](/zh/configuration/shared/certificate-p
 也将在启动时被拒绝。
 
 在 sing-box 1.14.0 中，请使用 [`evaluate`](/zh/configuration/dns/rule_action/#evaluate) 动作
-获取 DNS 响应，然后通过 `match_response` 显式匹配其标签。
+获取 DNS 响应，然后通过 `match_response` 显式匹配。
 
 !!! info "参考"
 
@@ -125,7 +125,7 @@ sing-box 1.14.0 新增字段参阅 [ACME](/zh/configuration/shared/certificate-p
             "server": "remote"
           },
           {
-            "match_response": "remote",
+            "match_response": true,
             "rule_set": "geoip-cn",
             "action": "route",
             "server": "local"

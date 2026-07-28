@@ -87,7 +87,7 @@ containing only `ip_cidr` items (for example, a GeoIP rule-set) without `match_r
 at startup when legacy DNS mode is disabled.
 
 In sing-box 1.14.0, use the [`evaluate`](/configuration/dns/rule_action/#evaluate) action
-to fetch a DNS response, then match against its tag explicitly with `match_response`.
+to fetch a DNS response, then match against it explicitly with `match_response`.
 
 !!! info "References"
 
@@ -125,7 +125,7 @@ to fetch a DNS response, then match against its tag explicitly with `match_respo
             "server": "remote"
           },
           {
-            "match_response": "remote",
+            "match_response": true,
             "rule_set": "geoip-cn",
             "action": "route",
             "server": "local"
