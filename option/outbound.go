@@ -124,7 +124,7 @@ type _DomainResolveOptions struct {
 type DomainResolveOptions _DomainResolveOptions
 
 func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
-	if len(o.Server) == 0 {
+	if o.Server == "" {
 		return []byte("{}"), nil
 	} else if o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
 		o.Timeout == 0 &&
@@ -138,38 +138,21 @@ func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func (o *DomainResolveOptions) UnmarshalJSON(content []byte) error {
-	var serverValue badoption.Listable[string]
-	err := json.Unmarshal(content, &serverValue)
+func (o *DomainResolveOptions) UnmarshalJSON(bytes []byte) error {
+	var stringValue string
+	err := json.Unmarshal(bytes, &stringValue)
 	if err == nil {
-		if len(serverValue) == 1 && serverValue[0] == "" {
-			serverValue = nil
-		}
-		o.Server = serverValue
-		return ValidateDNSServerList(o.Server, "")
+		o.Server = stringValue
+		return nil
 	}
-	err = json.Unmarshal(content, (*_DomainResolveOptions)(o))
+	err = json.Unmarshal(bytes, (*_DomainResolveOptions)(o))
 	if err != nil {
 		return err
 	}
-	if len(o.Server) == 0 {
+	if o.Server == "" {
 		return E.New("empty domain_resolver.server")
 	}
-	return ValidateDNSServerList(o.Server, o.ServerStrategy)
-}
-
-func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
-	return builder.Define("DomainResolver", func() (*schema.Node, error) {
-		objectForm := schema.StrictObject()
-		err := builder.FlattenStruct(objectForm, reflect.TypeFor[DomainResolveOptions]())
-		if err != nil {
-			return nil, err
-		}
-		objectForm.Required = []string{"server"}
-		serverForm := schema.ListableOf(schema.TagReferenceNode("dns_server"))
-		serverForm.AnyOf = append(serverForm.AnyOf, objectForm)
-		return serverForm, nil
-	})
+	return nil
 }
 
 func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
