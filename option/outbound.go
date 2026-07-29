@@ -112,21 +112,23 @@ type AbstractDialerOptions struct {
 }
 
 type _DomainResolveOptions struct {
-	Server                 string                `json:"server" reference:"dns_server"`
-	Timeout                badoption.Duration    `json:"timeout,omitempty"`
-	Strategy               DomainStrategy        `json:"strategy,omitempty"`
-	DisableCache           bool                  `json:"disable_cache,omitempty"`
-	DisableOptimisticCache bool                  `json:"disable_optimistic_cache,omitempty"`
-	RewriteTTL             *uint32               `json:"rewrite_ttl,omitempty"`
-	ClientSubnet           *badoption.Prefixable `json:"client_subnet,omitempty"`
+	Server                 badoption.Listable[string] `json:"server" reference:"dns_server"`
+	ServerStrategy         string                     `json:"server_strategy,omitempty" enum:"fallback,hybrid"`
+	Timeout                badoption.Duration         `json:"timeout,omitempty"`
+	Strategy               DomainStrategy             `json:"strategy,omitempty"`
+	DisableCache           bool                       `json:"disable_cache,omitempty"`
+	DisableOptimisticCache bool                       `json:"disable_optimistic_cache,omitempty"`
+	RewriteTTL             *uint32                    `json:"rewrite_ttl,omitempty"`
+	ClientSubnet           *badoption.Prefixable      `json:"client_subnet,omitempty"`
 }
 
 type DomainResolveOptions _DomainResolveOptions
 
 func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
-	if o.Server == "" {
+	if len(o.Server) == 0 {
 		return []byte("{}"), nil
-	} else if o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
+	} else if o.ServerStrategy == "" &&
+		o.Strategy == DomainStrategy(C.DomainStrategyAsIS) &&
 		o.Timeout == 0 &&
 		!o.DisableCache &&
 		!o.DisableOptimisticCache &&
@@ -138,21 +140,24 @@ func (o DomainResolveOptions) MarshalJSON() ([]byte, error) {
 	}
 }
 
-func (o *DomainResolveOptions) UnmarshalJSON(bytes []byte) error {
-	var stringValue string
-	err := json.Unmarshal(bytes, &stringValue)
+func (o *DomainResolveOptions) UnmarshalJSON(content []byte) error {
+	var serverValue badoption.Listable[string]
+	err := json.Unmarshal(content, &serverValue)
 	if err == nil {
-		o.Server = stringValue
-		return nil
+		if len(serverValue) == 1 && serverValue[0] == "" {
+			serverValue = nil
+		}
+		o.Server = serverValue
+		return ValidateDNSServerList(o.Server, "")
 	}
-	err = json.Unmarshal(bytes, (*_DomainResolveOptions)(o))
+	err = json.Unmarshal(content, (*_DomainResolveOptions)(o))
 	if err != nil {
 		return err
 	}
-	if o.Server == "" {
+	if len(o.Server) == 0 {
 		return E.New("empty domain_resolver.server")
 	}
-	return nil
+	return ValidateDNSServerList(o.Server, o.ServerStrategy)
 }
 
 func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
@@ -163,7 +168,9 @@ func (o DomainResolveOptions) DescribeSchema(builder schema.Builder) (*schema.No
 			return nil, err
 		}
 		objectForm.Required = []string{"server"}
-		return schema.AnyOf(schema.TagReferenceNode("dns_server"), objectForm), nil
+		serverForm := schema.ListableOf(schema.TagReferenceNode("dns_server"))
+		serverForm.AnyOf = append(serverForm.AnyOf, objectForm)
+		return serverForm, nil
 	})
 }
 

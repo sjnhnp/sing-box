@@ -86,54 +86,6 @@ func (r DNSRule) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
 	})
 }
 
-type DNSRuleMatchResponse struct {
-	Enabled bool
-	Tag     string
-}
-
-func (m *DNSRuleMatchResponse) UnmarshalJSON(content []byte) error {
-	var boolValue bool
-	err := json.Unmarshal(content, &boolValue)
-	if err == nil {
-		m.Enabled = boolValue
-		m.Tag = ""
-		return nil
-	}
-	var stringValue string
-	err = json.Unmarshal(content, &stringValue)
-	if err != nil {
-		return E.New("invalid match_response value")
-	}
-	if stringValue == "" {
-		return E.New("empty match_response tag")
-	}
-	m.Enabled = true
-	m.Tag = stringValue
-	return nil
-}
-
-func (m DNSRuleMatchResponse) MarshalJSON() ([]byte, error) {
-	if m.Tag != "" {
-		return json.Marshal(m.Tag)
-	}
-	return json.Marshal(m.Enabled)
-}
-
-func (m *DNSRuleMatchResponse) IsEnabled() bool {
-	return m != nil && m.Enabled
-}
-
-func (m *DNSRuleMatchResponse) ResponseTag() string {
-	if m == nil {
-		return ""
-	}
-	return m.Tag
-}
-
-func (m DNSRuleMatchResponse) DescribeSchema(builder schema.Builder) (*schema.Node, error) {
-	return schema.AnyOf(schema.BooleanNode(), schema.StringNode()), nil
-}
-
 type RawDefaultDNSRule struct {
 	Inbound                  badoption.Listable[string]                                                  `json:"inbound,omitempty" reference:"inbound"`
 	IPVersion                int                                                                         `json:"ip_version,omitempty" enum:"4,6"`
@@ -173,7 +125,7 @@ type RawDefaultDNSRule struct {
 	PreferredBy              badoption.Listable[string]                                                  `json:"preferred_by,omitempty"`
 	RuleSet                  badoption.Listable[string]                                                  `json:"rule_set,omitempty" reference:"rule_set"`
 	RuleSetIPCIDRMatchSource bool                                                                        `json:"rule_set_ip_cidr_match_source,omitempty"`
-	MatchResponse            *DNSRuleMatchResponse                                                       `json:"match_response,omitempty"`
+	MatchResponse            string                                                                      `json:"match_response,omitempty"`
 	IPCIDR                   badoption.Listable[string]                                                  `json:"ip_cidr,omitempty"`
 	IPIsPrivate              bool                                                                        `json:"ip_is_private,omitempty"`
 	IPAcceptAny              bool                                                                        `json:"ip_accept_any,omitempty"`
@@ -220,7 +172,7 @@ func (r *DefaultDNSRule) UnmarshalJSONContext(ctx context.Context, data []byte) 
 	if err != nil {
 		return err
 	}
-	if depth > 0 && rawAction == "" && routeOptions == (DNSRouteActionOptions{}) {
+	if depth > 0 && rawAction == "" && reflect.DeepEqual(routeOptions, DNSRouteActionOptions{}) {
 		r.DNSRuleAction = DNSRuleAction{}
 	}
 	return nil
@@ -265,7 +217,7 @@ func (r *LogicalDNSRule) UnmarshalJSONContext(ctx context.Context, data []byte) 
 	if err != nil {
 		return err
 	}
-	if depth > 0 && rawAction == "" && routeOptions == (DNSRouteActionOptions{}) {
+	if depth > 0 && rawAction == "" && reflect.DeepEqual(routeOptions, DNSRouteActionOptions{}) {
 		r.DNSRuleAction = DNSRuleAction{}
 	}
 	return nil

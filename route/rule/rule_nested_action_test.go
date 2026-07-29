@@ -7,6 +7,7 @@ import (
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+	"github.com/sagernet/sing/common/json/badoption"
 
 	"github.com/stretchr/testify/require"
 )
@@ -50,7 +51,7 @@ func TestNewDNSRuleRejectsNestedRuleAction(t *testing.T) {
 						DNSRuleAction: option.DNSRuleAction{
 							Action: C.RuleActionTypeRoute,
 							RouteOptions: option.DNSRouteActionOptions{
-								Server: "default",
+								Server: badoption.Listable[string]{"default"},
 							},
 						},
 					},
@@ -59,7 +60,7 @@ func TestNewDNSRuleRejectsNestedRuleAction(t *testing.T) {
 			DNSRuleAction: option.DNSRuleAction{
 				Action: C.RuleActionTypeRoute,
 				RouteOptions: option.DNSRouteActionOptions{
-					Server: "default",
+					Server: badoption.Listable[string]{"default"},
 				},
 			},
 		},

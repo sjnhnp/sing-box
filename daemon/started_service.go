@@ -609,17 +609,21 @@ func (s *StartedService) URLTest(ctx context.Context, request *URLTestRequest) (
 	}
 	boxService := s.instance
 	s.serviceAccess.RUnlock()
-	outboundTag := request.OutboundTag
-	outbound, isLoaded := boxService.outboundManager.Outbound(outboundTag)
+	groupTag := request.OutboundTag
+	abstractOutboundGroup, isLoaded := boxService.outboundManager.Outbound(groupTag)
 	if !isLoaded {
-		return nil, status.Error(codes.NotFound, "outbound not found: "+outboundTag)
+		return nil, status.Error(codes.NotFound, "outbound group not found: "+groupTag)
 	}
-	historyStorage := boxService.urlTestHistoryStorage
-	urlTest, isURLTest := outbound.(*group.URLTest)
-	outboundGroup, isOutboundGroup := outbound.(adapter.OutboundGroup)
+	outboundGroup, isOutboundGroup := abstractOutboundGroup.(adapter.OutboundGroup)
+	if !isOutboundGroup {
+		return nil, status.Error(codes.InvalidArgument, "outbound is not a group: "+groupTag)
+	}
+	urlTest, isURLTest := abstractOutboundGroup.(*group.URLTest)
 	if isURLTest {
 		go urlTest.CheckOutbounds()
-	} else if isOutboundGroup {
+	} else {
+		historyStorage := boxService.urlTestHistoryStorage
+
 		outbounds := common.Filter(common.Map(outboundGroup.All(), func(it string) adapter.Outbound {
 			itOutbound, _ := boxService.outboundManager.Outbound(it)
 			return itOutbound
@@ -633,13 +637,13 @@ func (s *StartedService) URLTest(ctx context.Context, request *URLTestRequest) (
 		b, _ := batch.New(boxService.ctx, batch.WithConcurrencyNum[any](10))
 		for _, detour := range outbounds {
 			outboundToTest := detour
-			itemTag := outboundToTest.Tag()
-			b.Go(itemTag, func() (any, error) {
+			outboundTag := outboundToTest.Tag()
+			b.Go(outboundTag, func() (any, error) {
 				t, err := urltest.URLTest(boxService.ctx, "", outboundToTest)
 				if err != nil {
-					historyStorage.DeleteURLTestHistory(itemTag)
+					historyStorage.DeleteURLTestHistory(outboundTag)
 				} else {
-					historyStorage.StoreURLTestHistory(itemTag, &adapter.URLTestHistory{
+					historyStorage.StoreURLTestHistory(outboundTag, &adapter.URLTestHistory{
 						Time:  time.Now(),
 						Delay: t,
 					})
@@ -647,18 +651,6 @@ func (s *StartedService) URLTest(ctx context.Context, request *URLTestRequest) (
 				return nil, nil
 			})
 		}
-	} else {
-		go func() {
-			t, err := urltest.URLTest(boxService.ctx, "", outbound)
-			if err != nil {
-				historyStorage.DeleteURLTestHistory(outboundTag)
-			} else {
-				historyStorage.StoreURLTestHistory(outboundTag, &adapter.URLTestHistory{
-					Time:  time.Now(),
-					Delay: t,
-				})
-			}
-		}()
 	}
 	return &emptypb.Empty{}, nil
 }
@@ -1287,7 +1279,7 @@ func (s *StartedService) StartNetworkQualityTest(
 		return err
 	}
 
-	resolvedDialer := dialer.NewResolveDialer(boxService.ctx, outbound, true, "", adapter.DNSQueryOptions{}, 0)
+	resolvedDialer := dialer.NewResolveDialer(boxService.ctx, outbound, true, nil, adapter.DNSQueryOptions{}, 0)
 	httpClient := networkquality.NewHTTPClient(resolvedDialer)
 	defer httpClient.CloseIdleConnections()
 
@@ -1333,7 +1325,7 @@ func (s *StartedService) StartSTUNTest(
 		return err
 	}
 
-	resolvedDialer := dialer.NewResolveDialer(boxService.ctx, outbound, true, "", adapter.DNSQueryOptions{}, 0)
+	resolvedDialer := dialer.NewResolveDialer(boxService.ctx, outbound, true, nil, adapter.DNSQueryOptions{}, 0)
 
 	result, stunErr := stun.Run(stun.Options{
 		Server:  request.Server,

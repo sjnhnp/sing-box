@@ -28,16 +28,12 @@ func NewDNSRule(ctx context.Context, logger log.ContextLogger, options option.DN
 		if err != nil {
 			return nil, err
 		}
-		if options.DefaultOptions.Race && !options.DefaultOptions.MatchResponse.IsEnabled() {
+		if options.DefaultOptions.Race && options.DefaultOptions.MatchResponse == "" {
 			return nil, E.New("`race` requires `match_response`")
 		}
 		switch options.DefaultOptions.Action {
 		case "", C.RuleActionTypeRoute:
 			if len(options.DefaultOptions.RouteOptions.Server) == 0 && checkServer {
-				return nil, E.New("missing server field")
-			}
-		case C.RuleActionTypeEvaluate:
-			if options.DefaultOptions.EvaluateOptions.Server == "" && checkServer {
 				return nil, E.New("missing server field")
 			}
 		case C.RuleActionTypeEvaluate:
@@ -66,10 +62,6 @@ func NewDNSRule(ctx context.Context, logger log.ContextLogger, options option.DN
 			if options.LogicalOptions.EvaluateOptions.Server == "" && checkServer {
 				return nil, E.New("missing server field")
 			}
-		case C.RuleActionTypeEvaluate:
-			if options.LogicalOptions.EvaluateOptions.Server == "" && checkServer {
-				return nil, E.New("missing server field")
-			}
 		}
 		return NewLogicalDNSRule(ctx, logger, options.LogicalOptions, legacyDNSMode)
 	default:
@@ -91,6 +83,15 @@ func validateDNSRuleAction(action option.DNSRuleAction) error {
 			return E.New("`race` and `speculative` cannot be combined on the same rule")
 		}
 	}
+	if action.Action == "" || action.Action == C.RuleActionTypeRoute {
+		err := option.ValidateDNSServerList(action.RouteOptions.Server, action.RouteOptions.ServerStrategy)
+		if err != nil {
+			return err
+		}
+		if len(action.RouteOptions.Server) > 1 && action.RouteOptions.Speculative {
+			return E.New("`speculative` requires a single server")
+		}
+	}
 	return nil
 }
 
@@ -98,7 +99,6 @@ var _ adapter.DNSRule = (*DefaultDNSRule)(nil)
 
 type DefaultDNSRule struct {
 	abstractDefaultRule
-	matchResponse    bool
 	matchResponseTag string
 	race             bool
 }
@@ -109,8 +109,7 @@ func NewDefaultDNSRule(ctx context.Context, logger log.ContextLogger, options op
 			invert: options.Invert,
 			action: NewDNSRuleAction(logger, options.DNSRuleAction),
 		},
-		matchResponse:    options.MatchResponse.IsEnabled(),
-		matchResponseTag: options.MatchResponse.ResponseTag(),
+		matchResponseTag: options.MatchResponse,
 		race:             options.Race,
 	}
 	if len(options.Inbound) > 0 {
@@ -402,7 +401,7 @@ func (r *DefaultDNSRule) Match(metadata *adapter.InboundContext) bool {
 }
 
 func (r *DefaultDNSRule) LegacyPreMatch(metadata *adapter.InboundContext) bool {
-	if r.matchResponse {
+	if r.matchResponseTag != "" {
 		return false
 	}
 	metadata.IgnoreDestinationIPCIDRMatch = true
@@ -422,7 +421,7 @@ func (r *DefaultDNSRule) MatchResponseTags() []string {
 }
 
 func (r *DefaultDNSRule) MatchResponseAnonymous() bool {
-	return r.matchResponse && r.matchResponseTag == ""
+	return r.matchResponseTag == ""
 }
 
 func (r *DefaultDNSRule) Race() bool {
@@ -430,11 +429,8 @@ func (r *DefaultDNSRule) Race() bool {
 }
 
 func (r *DefaultDNSRule) matchForMatch(metadata *adapter.InboundContext) bool {
-	if r.matchResponse {
-		response := metadata.DNSResponse
-		if r.matchResponseTag != "" {
-			response = metadata.NamedDNSResponses[r.matchResponseTag]
-		}
+	if r.matchResponseTag != "" {
+		response := metadata.NamedDNSResponses[r.matchResponseTag]
 		if response == nil {
 			return r.invert
 		}
@@ -457,9 +453,8 @@ var _ adapter.DNSRule = (*LogicalDNSRule)(nil)
 
 type LogicalDNSRule struct {
 	abstractLogicalRule
-	matchResponseTags      []string
-	matchResponseAnonymous bool
-	race                   bool
+	matchResponseTags []string
+	race              bool
 }
 
 func (r *LogicalDNSRule) MatchResponseTag() string {
@@ -471,7 +466,7 @@ func (r *LogicalDNSRule) MatchResponseTags() []string {
 }
 
 func (r *LogicalDNSRule) MatchResponseAnonymous() bool {
-	return r.matchResponseAnonymous
+	return false
 }
 
 func (r *LogicalDNSRule) Race() bool {
@@ -537,11 +532,10 @@ func NewLogicalDNSRule(ctx context.Context, logger log.ContextLogger, options op
 	for _, subRule := range r.rules {
 		if dnsRule, isDNSRule := subRule.(adapter.DNSRule); isDNSRule {
 			r.matchResponseTags = append(r.matchResponseTags, dnsRule.MatchResponseTags()...)
-			r.matchResponseAnonymous = r.matchResponseAnonymous || dnsRule.MatchResponseAnonymous()
 		}
 	}
 	r.matchResponseTags = common.Uniq(r.matchResponseTags)
-	if r.race && len(r.matchResponseTags) == 0 && !r.matchResponseAnonymous {
+	if r.race && len(r.matchResponseTags) == 0 {
 		return nil, E.New("`race` requires `match_response` in sub-rules")
 	}
 	return r, nil

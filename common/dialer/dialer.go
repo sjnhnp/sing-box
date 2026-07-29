@@ -62,7 +62,7 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 			return nil, err
 		}
 	}
-	if options.RemoteIsDomain && (!hasDetour || options.ResolverOnDetour || dialOptions.DomainResolver != nil && dialOptions.DomainResolver.Server != "") {
+	if options.RemoteIsDomain && (!hasDetour || options.ResolverOnDetour || dialOptions.DomainResolver != nil && len(dialOptions.DomainResolver.Server) > 0) {
 		networkManager := service.FromContext[adapter.NetworkManager](options.Context)
 		dnsTransport := service.FromContext[adapter.DNSTransportManager](options.Context)
 		var defaultOptions adapter.NetworkOptions
@@ -98,13 +98,18 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 			}
 			servers = dialOptions.DomainResolver.Server
 			dnsQueryOptions = adapter.DNSQueryOptions{
-				Transport:              transport,
+				ServerStrategy:         dialOptions.DomainResolver.ServerStrategy,
 				Strategy:               strategy,
 				Timeout:                time.Duration(dialOptions.DomainResolver.Timeout),
 				DisableCache:           dialOptions.DomainResolver.DisableCache,
 				DisableOptimisticCache: dialOptions.DomainResolver.DisableOptimisticCache,
 				RewriteTTL:             dialOptions.DomainResolver.RewriteTTL,
 				ClientSubnet:           dialOptions.DomainResolver.ClientSubnet.Build(netip.Prefix{}),
+			}
+			if len(transports) == 1 {
+				dnsQueryOptions.Transport = transports[0]
+			} else if len(transports) > 1 {
+				dnsQueryOptions.Transports = transports
 			}
 			resolveFallbackDelay = time.Duration(dialOptions.FallbackDelay)
 		} else if options.DirectResolver {
