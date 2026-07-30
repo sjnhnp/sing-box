@@ -40,7 +40,7 @@ Write-Host "✅ Backup created at $backupDir"
 ```bash
 git remote add upstream https://github.com/SagerNet/sing-box.git 2>$null
 git fetch upstream --tags
-git merge upstream/testing -X theirs -m "Merge upstream testing (Smart Sync)"
+git merge upstream/testing -m "Merge upstream testing (Smart Sync)"
 ```
 
 ### 3. 恢复 CI 配置和文档
