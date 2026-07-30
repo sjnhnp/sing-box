@@ -846,13 +846,15 @@ func (r *Router) finishPendingExchange(ctx context.Context, message *mDNS.Msg, s
 	}
 	if len(pending.transports) > 1 {
 		return r.exchangeMultiTransport(ctx, message, pending.transports, pending.strategy, r.finalizeExchangeOptions(pending.options))
+	} else if len(pending.transports) == 1 {
+		response, err := r.client.Exchange(adapter.OverrideContext(ctx), pending.transports[0], message, r.finalizeExchangeOptions(pending.options), nil)
+		return exchangeWithRulesResult{
+			response:  response,
+			transport: pending.transports[0],
+			err:       err,
+		}
 	}
-	response, err := r.client.Exchange(adapter.OverrideContext(ctx), pending.transports[0], message, r.finalizeExchangeOptions(pending.options), nil)
-	return exchangeWithRulesResult{
-		response:  response,
-		transport: pending.transports[0],
-		err:       err,
-	}
+	return exchangeWithRulesResult{}
 }
 
 func dnsExchangeFailed(response *mDNS.Msg, err error) bool {

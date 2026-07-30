@@ -99,6 +99,7 @@ var _ adapter.DNSRule = (*DefaultDNSRule)(nil)
 
 type DefaultDNSRule struct {
 	abstractDefaultRule
+	matchResponse    bool
 	matchResponseTag string
 	race             bool
 }
@@ -109,6 +110,7 @@ func NewDefaultDNSRule(ctx context.Context, logger log.ContextLogger, options op
 			invert: options.Invert,
 			action: NewDNSRuleAction(logger, options.DNSRuleAction),
 		},
+		matchResponse:    options.MatchResponse != "",
 		matchResponseTag: options.MatchResponse,
 		race:             options.Race,
 	}
@@ -401,7 +403,7 @@ func (r *DefaultDNSRule) Match(metadata *adapter.InboundContext) bool {
 }
 
 func (r *DefaultDNSRule) LegacyPreMatch(metadata *adapter.InboundContext) bool {
-	if r.matchResponseTag != "" {
+	if r.matchResponse || r.matchResponseTag != "" {
 		return false
 	}
 	metadata.IgnoreDestinationIPCIDRMatch = true
@@ -421,7 +423,7 @@ func (r *DefaultDNSRule) MatchResponseTags() []string {
 }
 
 func (r *DefaultDNSRule) MatchResponseAnonymous() bool {
-	return r.matchResponseTag == ""
+	return r.matchResponse && r.matchResponseTag == ""
 }
 
 func (r *DefaultDNSRule) Race() bool {
@@ -429,8 +431,11 @@ func (r *DefaultDNSRule) Race() bool {
 }
 
 func (r *DefaultDNSRule) matchForMatch(metadata *adapter.InboundContext) bool {
-	if r.matchResponseTag != "" {
-		response := metadata.NamedDNSResponses[r.matchResponseTag]
+	if r.matchResponse || r.matchResponseTag != "" {
+		response := metadata.DNSResponse
+		if r.matchResponseTag != "" {
+			response = metadata.NamedDNSResponses[r.matchResponseTag]
+		}
 		if response == nil {
 			return r.invert
 		}
@@ -453,8 +458,9 @@ var _ adapter.DNSRule = (*LogicalDNSRule)(nil)
 
 type LogicalDNSRule struct {
 	abstractLogicalRule
-	matchResponseTags []string
-	race              bool
+	matchResponseTags      []string
+	matchResponseAnonymous bool
+	race                   bool
 }
 
 func (r *LogicalDNSRule) MatchResponseTag() string {
@@ -466,7 +472,7 @@ func (r *LogicalDNSRule) MatchResponseTags() []string {
 }
 
 func (r *LogicalDNSRule) MatchResponseAnonymous() bool {
-	return false
+	return r.matchResponseAnonymous
 }
 
 func (r *LogicalDNSRule) Race() bool {
@@ -532,10 +538,11 @@ func NewLogicalDNSRule(ctx context.Context, logger log.ContextLogger, options op
 	for _, subRule := range r.rules {
 		if dnsRule, isDNSRule := subRule.(adapter.DNSRule); isDNSRule {
 			r.matchResponseTags = append(r.matchResponseTags, dnsRule.MatchResponseTags()...)
+			r.matchResponseAnonymous = r.matchResponseAnonymous || dnsRule.MatchResponseAnonymous()
 		}
 	}
 	r.matchResponseTags = common.Uniq(r.matchResponseTags)
-	if r.race && len(r.matchResponseTags) == 0 {
+	if r.race && len(r.matchResponseTags) == 0 && !r.matchResponseAnonymous {
 		return nil, E.New("`race` requires `match_response` in sub-rules")
 	}
 	return r, nil

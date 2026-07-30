@@ -19,6 +19,7 @@ import (
 	"github.com/sagernet/sing-box/dns/transport/mdns"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
+ // Removed: github.com/sagernet/sing-box/protocol/anytls - not used
 	"github.com/sagernet/sing-box/protocol/block"
 	"github.com/sagernet/sing-box/protocol/bridge"
 	"github.com/sagernet/sing-box/protocol/direct"
@@ -31,6 +32,8 @@ import (
  // Removed: github.com/sagernet/sing-box/protocol/shadowtls - not used
 	"github.com/sagernet/sing-box/protocol/snell"
 	"github.com/sagernet/sing-box/protocol/socks"
+ // Removed: github.com/sagernet/sing-box/protocol/ssh - not used
+ // Removed: github.com/sagernet/sing-box/protocol/tor - not used
 	"github.com/sagernet/sing-box/protocol/trojan"
 	"github.com/sagernet/sing-box/protocol/tun"
 	"github.com/sagernet/sing-box/protocol/vless"
@@ -63,9 +66,9 @@ func InboundRegistry() *inbound.Registry {
 	vmess.RegisterInbound(registry)
 	trojan.RegisterInbound(registry)
 	naive.RegisterInbound(registry)
-	// Removed: shadowtls.RegisterInbound(registry) - not used
+ // Removed: shadowtls.RegisterInbound(registry)
 	vless.RegisterInbound(registry)
-	// Removed: anytls.RegisterInbound(registry) - not used
+ // Removed: anytls.RegisterInbound(registry)
 
 	registerQUICInbounds(registry)
 	registerCloudflaredInbound(registry)
@@ -92,11 +95,11 @@ func OutboundRegistry() *outbound.Registry {
 	vmess.RegisterOutbound(registry)
 	trojan.RegisterOutbound(registry)
 	registerNaiveOutbound(registry)
-	// Removed: tor.RegisterOutbound(registry) - not used
-	// Removed: ssh.RegisterOutbound(registry) - not used
-	// Removed: shadowtls.RegisterOutbound(registry) - not used
+ // Removed: tor.RegisterOutbound(registry)
+ // Removed: ssh.RegisterOutbound(registry)
+ // Removed: shadowtls.RegisterOutbound(registry)
 	vless.RegisterOutbound(registry)
-	// Removed: anytls.RegisterOutbound(registry) - not used
+ // Removed: anytls.RegisterOutbound(registry)
 
 	registerQUICOutbounds(registry)
 	registerStubForRemovedOutbounds(registry)
