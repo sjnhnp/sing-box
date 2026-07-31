@@ -385,8 +385,8 @@ jobs:
           check-latest: false
           cache-dependency-path: sing-box/go.sum
 
-      - name: Apply protocol modifications (Unix)
-        if: matrix.os != 'windows'
+      - name: Apply protocol modifications
+        shell: bash
         run: |
           PROTOCOL_MODE="${{ needs.strategy_matrix.outputs.protocol_mode }}"
           echo "Protocol mode: $PROTOCOL_MODE"
@@ -474,67 +474,6 @@ jobs:
               ;;
           esac
 
-      - name: Apply protocol modifications (Windows)
-        if: matrix.os == 'windows'
-        shell: pwsh
-        run: |
-          $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
-          switch ($PROTOCOL_MODE) {
-            "slim" {
-              echo "Generating slim registry files..."
-              $env:PROTO_VLESS="true"
-              $env:PROTO_VMESS="true"
-              $env:PROTO_TROJAN="true"
-              $env:PROTO_SHADOWSOCKS="true"
-              $env:PROTO_HYSTERIA2="true"
-              $env:PROTO_NAIVE="true"
-              $env:PROTO_HYSTERIA="false"
-              $env:PROTO_TUIC="false"
-              $env:PROTO_SHADOWTLS="false"
-              $env:PROTO_ANYTLS="false"
-              $env:PROTO_WIREGUARD="false"
-              $env:PROTO_TAILSCALE="false"
-              $env:PROTO_SSH="false"
-              $env:PROTO_TOR="false"
-              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log", "daemon", "schema")
-              foreach ($dir in $dirs) {
-                if (Test-Path "custom/$dir") {
-                  if (Test-Path "sing-box/$dir") { Remove-Item -Recurse -Force "sing-box/$dir" }
-                  New-Item -ItemType Directory -Force -Path "sing-box/$dir"
-                  Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
-                }
-              }
-              if (Test-Path "custom/go.mod") { Copy-Item "custom/go.mod" "sing-box/go.mod" -Force }
-              if (Test-Path "custom/go.sum") { Copy-Item "custom/go.sum" "sing-box/go.sum" -Force }
-              if (Test-Path "custom/box.go") { Copy-Item "custom/box.go" "sing-box/box.go" -Force }
-              $env:OUTPUT_DIR="sing-box/include"
-              bash custom/.github/scripts/generate-registry.sh
-              Set-Location sing-box
-              go mod tidy
-              Set-Location ..
-            }
-            "full" {}
-            "custom" {
-              Copy-Item custom/include/registry.go sing-box/include/registry.go -Force
-              Copy-Item custom/include/quic.go sing-box/include/quic.go -Force
-              Copy-Item custom/include/quic_stub.go sing-box/include/quic_stub.go -Force
-              $dirs = @("include", "experimental", "route", "option", "adapter", "constant", "common", "protocol", "service", "transport", "dns", "log", "daemon", "schema")
-              foreach ($dir in $dirs) {
-                if (Test-Path "custom/$dir") {
-                  if (Test-Path "sing-box/$dir") { Remove-Item -Recurse -Force "sing-box/$dir" }
-                  New-Item -ItemType Directory -Force -Path "sing-box/$dir"
-                  Copy-Item -Recurse "custom/$dir/*" "sing-box/$dir/" -Force
-                }
-              }
-              if (Test-Path "custom/go.mod") { Copy-Item "custom/go.mod" "sing-box/go.mod" -Force }
-              if (Test-Path "custom/go.sum") { Copy-Item "custom/go.sum" "sing-box/go.sum" -Force }
-              if (Test-Path "custom/box.go") { Copy-Item "custom/box.go" "sing-box/box.go" -Force }
-              Set-Location sing-box
-              go mod tidy
-              Set-Location ..
-            }
-          }
-
       - name: Setup Android NDK
         if: matrix.type == 'android'
         id: setup-ndk
@@ -572,14 +511,15 @@ jobs:
       - name: Build Desktop (Windows)
         if: matrix.os == 'windows'
         working-directory: sing-box
+        shell: bash
         run: |
           mkdir -p dist
-          $env:CGO_ENABLED = "0"
-          $env:GOOS = "windows"
-          $env:GOARCH = "${{ matrix.arch }}"
-          $TAGS = "${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
-          go build -v -trimpath -o dist/sing-box.exe -tags "$TAGS" `
-            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" `
+          export CGO_ENABLED=0
+          export GOOS=windows
+          export GOARCH="${{ matrix.arch }}"
+          TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
+          go build -v -trimpath -o dist/sing-box.exe -tags "${TAGS}" \
+            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" \
             ./cmd/sing-box
 
       - name: Build Desktop (macOS)
@@ -591,7 +531,7 @@ jobs:
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }}"
           CGO_ENABLED=1 GOOS=darwin GOARCH=${{ matrix.arch }} \
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" \
             ./cmd/sing-box
 
       - name: Build Desktop (Linux)
@@ -603,16 +543,16 @@ jobs:
           TAGS="${{ needs.strategy_matrix.outputs.build_tags }},with_purego"
           CGO_ENABLED=0 GOOS=linux GOARCH=${{ matrix.arch }} \
           go build -v -trimpath -o dist/sing-box -tags "${TAGS}" \
-            -ldflags '-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0' \
+            -ldflags "-s -buildid= -X github.com/sagernet/sing-box/constant.Version=${{ matrix.version }} -X internal/godebug.defaultGODEBUG=multipathtcp=0 -checklinkname=0" \
             ./cmd/sing-box
 
       - name: Extract libcronet (Windows)
         if: matrix.os == 'windows'
         working-directory: sing-box
+        shell: bash
         run: |
-          $CRONET_GO_VERSION = Get-Content ../custom/.github/CRONET_GO_VERSION
-          $env:CGO_ENABLED = "0"
-          go run -v "github.com/sagernet/cronet-go/cmd/build-naive@$CRONET_GO_VERSION" extract-lib --target windows/${{ matrix.arch }} -o dist
+          CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
+          CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target windows/${{ matrix.arch }} -o dist
 
       - name: Extract libcronet (Linux)
         if: matrix.os == 'linux'
