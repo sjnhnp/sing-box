@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -101,8 +100,10 @@ type Endpoint struct {
 	sshReconfigHook   wgengine.ReconfigListener
 
 	cfg           *wgcfg.Config
+	routerCfg     *router.Config
 	dnsCfg        *tsDNS.Config
 	routeDomains  common.TypedValue[map[string]bool]
+	searchDomains atomic.Bool
 	routePrefixes atomic.Pointer[netipx.IPSet]
 
 	acceptRoutes               bool
@@ -171,21 +172,11 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 	} else {
 		udpTimeout = C.UDPTimeout
 	}
-	var remoteIsDomain bool
-	if options.ControlURL != "" {
-		controlURL, err := url.Parse(options.ControlURL)
-		if err != nil {
-			return nil, E.Cause(err, "parse control URL")
-		}
-		remoteIsDomain = M.ParseSocksaddr(controlURL.Hostname()).Fqdn != ""
-	} else {
-		// controlplane.tailscale.com
-		remoteIsDomain = true
-	}
+
 	outboundDialer, err := dialer.NewWithOptions(dialer.Options{
 		Context:          ctx,
 		Options:          options.DialerOptions,
-		RemoteIsDomain:   remoteIsDomain,
+		RemoteIsDomain:   true,
 		ResolverOnDetour: true,
 		NewDialer:        true,
 	})
@@ -339,7 +330,7 @@ func (t *Endpoint) start() error {
 		}
 		t.systemTun = systemTun
 		t.systemDialer = systemDialer
-		t.server.TunDevice = wgTunDevice
+		t.server.Tun = wgTunDevice
 	}
 	if t.network.AutoRedirectOutputMark() != 0 {
 		netns.SetControlFunc(t.network.AutoRedirectOutputMarkFunc())
@@ -503,9 +494,18 @@ func (t *Endpoint) watchState() {
 	localBackend := t.server.ExportLocalBackend()
 	var reportedAuthURL string
 	exitNodePending := t.exitNode != ""
-	localBackend.WatchNotifications(t.ctx, ipn.NotifyInitialState, nil, func(roNotify *ipn.Notify) (keepGoing bool) {
-		if roNotify.State == nil && roNotify.BrowseToURL == nil {
-			return true
+	localBackend.WatchNotifications(t.ctx, ipn.NotifyInitialState|ipn.NotifyInitialNetMap, nil, func(roNotify *ipn.Notify) (keepGoing bool) {
+		if roNotify.NetMap != nil {
+			var builder netipx.IPSetBuilder
+			for _, peer := range roNotify.NetMap.Peers {
+				for _, allowedIP := range peer.AllowedIPs().All() {
+					if allowedIP.Bits() == 0 {
+						continue
+					}
+					builder.AddPrefix(allowedIP)
+				}
+			}
+			t.routePrefixes.Store(common.Must1(builder.IPSet()))
 		}
 		status := localBackend.StatusWithoutPeers()
 		switch status.BackendState {
@@ -900,7 +900,11 @@ func (t *Endpoint) PreferredDomain(metadata *adapter.InboundContext, domain stri
 	if routeDomains == nil {
 		return false
 	}
-	return routeDomains[strings.ToLower(domain)]
+	domain = strings.ToLower(domain)
+	if routeDomains[domain] {
+		return true
+	}
+	return !strings.Contains(domain, ".") && t.searchDomains.Load()
 }
 
 func (t *Endpoint) PreferredAddress(metadata *adapter.InboundContext, address netip.Addr) bool {
@@ -919,10 +923,13 @@ func (t *Endpoint) onReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCf
 	if cfg == nil || dnsCfg == nil {
 		return
 	}
-	if (t.cfg != nil && reflect.DeepEqual(t.cfg, cfg)) && (t.dnsCfg != nil && reflect.DeepEqual(t.dnsCfg, dnsCfg)) {
+	if t.cfg != nil && reflect.DeepEqual(t.cfg, cfg) &&
+		t.routerCfg != nil && reflect.DeepEqual(t.routerCfg, routerCfg) &&
+		t.dnsCfg != nil && reflect.DeepEqual(t.dnsCfg, dnsCfg) {
 		return
 	}
 	t.cfg = cfg
+	t.routerCfg = routerCfg
 	t.dnsCfg = dnsCfg
 
 	routeDomains := make(map[string]bool)
@@ -933,14 +940,7 @@ func (t *Endpoint) onReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCf
 		routeDomains[fqdn.WithoutTrailingDot()] = true
 	}
 	t.routeDomains.Store(routeDomains)
-
-	var builder netipx.IPSetBuilder
-	for _, peer := range cfg.Peers {
-		for _, allowedIP := range peer.AllowedIPs {
-			builder.AddPrefix(allowedIP)
-		}
-	}
-	t.routePrefixes.Store(common.Must1(builder.IPSet()))
+	t.searchDomains.Store(len(dnsCfg.SearchDomains) > 0)
 
 	if t.onReconfigHook != nil {
 		t.onReconfigHook(cfg, routerCfg, dnsCfg)

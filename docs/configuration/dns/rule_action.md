@@ -134,6 +134,19 @@ When `speculative` is enabled, the query is sent as soon as the rule matches, in
 the pending race rules, and may be wasted: its response is still used only after none of the
 race rules matched.
 
+#### speculative
+
+!!! question "Since sing-box 1.14.0"
+
+Conflict with `race`. Has no effect without a preceding `race` rule.
+
+By default, no query is sent in parallel with pending race rules: a matched `route` action
+holds its query until none of the race rules matched.
+
+When `speculative` is enabled, the query is sent as soon as the rule matches, in parallel with
+the pending race rules, and may be wasted: its response is still used only after none of the
+race rules matched.
+
 #### strategy
 
 !!! question "Since sing-box 1.12.0"
