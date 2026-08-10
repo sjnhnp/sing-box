@@ -78,74 +78,7 @@ matched. The result may therefore depend on server speed only among race rules.
 
 ==Required==
 
-Tag of target server or list of target server tags.
-
-#### server_strategy
-
-!!! question "Since sing-box 1.14.0"
-
-DNS server selection strategy when multiple servers are configured.
-
-Available values:
-
-- `fallback`: Use servers in order and fall back to later servers when needed.
-- `hybrid`: Query servers concurrently and use the first available result.
-
-`fallback` is used by default.
-
-#### speculative
-
-!!! question "Since sing-box 1.14.0"
-
-Only available when `server` contains a single server.
-
-Conflict with `race`. Has no effect without a preceding `race` rule.
-
-By default, no query is sent in parallel with pending race rules: a matched `route` action
-holds its query until none of the race rules matched.
-
-When `speculative` is enabled, the query is sent as soon as the rule matches, in parallel with
-the pending race rules, and may be wasted: its response is still used only after none of the
-race rules matched.
-
-#### speculative
-
-!!! question "Since sing-box 1.14.0"
-
-Conflict with `race`. Has no effect without a preceding `race` rule.
-
-By default, no query is sent in parallel with pending race rules: a matched `route` action
-holds its query until none of the race rules matched.
-
-When `speculative` is enabled, the query is sent as soon as the rule matches, in parallel with
-the pending race rules, and may be wasted: its response is still used only after none of the
-race rules matched.
-
-#### speculative
-
-!!! question "Since sing-box 1.14.0"
-
-Conflict with `race`. Has no effect without a preceding `race` rule.
-
-By default, no query is sent in parallel with pending race rules: a matched `route` action
-holds its query until none of the race rules matched.
-
-When `speculative` is enabled, the query is sent as soon as the rule matches, in parallel with
-the pending race rules, and may be wasted: its response is still used only after none of the
-race rules matched.
-
-#### speculative
-
-!!! question "Since sing-box 1.14.0"
-
-Conflict with `race`. Has no effect without a preceding `race` rule.
-
-By default, no query is sent in parallel with pending race rules: a matched `route` action
-holds its query until none of the race rules matched.
-
-When `speculative` is enabled, the query is sent as soon as the rule matches, in parallel with
-the pending race rules, and may be wasted: its response is still used only after none of the
-race rules matched.
+Tag of target server.
 
 #### speculative
 

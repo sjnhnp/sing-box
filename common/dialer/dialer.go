@@ -62,7 +62,7 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 			return nil, err
 		}
 	}
-	if options.RemoteIsDomain && (!hasDetour || options.ResolverOnDetour || dialOptions.DomainResolver != nil && len(dialOptions.DomainResolver.Server) > 0) {
+	if options.RemoteIsDomain && (!hasDetour || options.ResolverOnDetour || dialOptions.DomainResolver != nil && dialOptions.DomainResolver.Server != "") {
 		networkManager := service.FromContext[adapter.NetworkManager](options.Context)
 		dnsTransport := service.FromContext[adapter.DNSTransportManager](options.Context)
 		var defaultOptions adapter.NetworkOptions
@@ -70,20 +70,17 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 			defaultOptions = networkManager.DefaultOptions()
 		}
 		var (
-			servers              []string
+			server               string
 			dnsQueryOptions      adapter.DNSQueryOptions
 			resolveFallbackDelay time.Duration
 		)
-		if dialOptions.DomainResolver != nil && len(dialOptions.DomainResolver.Server) > 0 {
-			var transports []adapter.DNSTransport
+		if dialOptions.DomainResolver != nil && dialOptions.DomainResolver.Server != "" {
+			var transport adapter.DNSTransport
 			if !options.DirectResolver {
-				transports = make([]adapter.DNSTransport, 0, len(dialOptions.DomainResolver.Server))
-				for _, server := range dialOptions.DomainResolver.Server {
-					transport, loaded := dnsTransport.Transport(server)
-					if !loaded {
-						return nil, E.New("domain resolver not found: ", server)
-					}
-					transports = append(transports, transport)
+				var loaded bool
+				transport, loaded = dnsTransport.Transport(dialOptions.DomainResolver.Server)
+				if !loaded {
+					return nil, E.New("domain resolver not found: " + dialOptions.DomainResolver.Server)
 				}
 			}
 			var strategy C.DomainStrategy
@@ -96,9 +93,9 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 				strategy = C.DomainStrategy(dialOptions.DomainStrategy)
 				deprecated.Report(options.Context, deprecated.OptionLegacyDomainStrategyOptions)
 			}
-			servers = dialOptions.DomainResolver.Server
+			server = dialOptions.DomainResolver.Server
 			dnsQueryOptions = adapter.DNSQueryOptions{
-				ServerStrategy:         dialOptions.DomainResolver.ServerStrategy,
+				Transport:              transport,
 				Strategy:               strategy,
 				Timeout:                time.Duration(dialOptions.DomainResolver.Timeout),
 				DisableCache:           dialOptions.DomainResolver.DisableCache,
@@ -106,35 +103,22 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 				RewriteTTL:             dialOptions.DomainResolver.RewriteTTL,
 				ClientSubnet:           dialOptions.DomainResolver.ClientSubnet.Build(netip.Prefix{}),
 			}
-			if len(transports) == 1 {
-				dnsQueryOptions.Transport = transports[0]
-			} else if len(transports) > 1 {
-				dnsQueryOptions.Transports = transports
-			}
 			resolveFallbackDelay = time.Duration(dialOptions.FallbackDelay)
 		} else if options.DirectResolver {
 			return nil, E.New("missing domain resolver for domain server address")
 		} else {
-			if len(defaultOptions.DomainResolvers) > 0 {
+			if defaultOptions.DomainResolver != "" {
 				dnsQueryOptions = defaultOptions.DomainResolveOptions
-				transports := make([]adapter.DNSTransport, 0, len(defaultOptions.DomainResolvers))
-				for _, server := range defaultOptions.DomainResolvers {
-					transport, loaded := dnsTransport.Transport(server)
-					if !loaded {
-						return nil, E.New("default domain resolver not found: ", server)
-					}
-					transports = append(transports, transport)
+				transport, loaded := dnsTransport.Transport(defaultOptions.DomainResolver)
+				if !loaded {
+					return nil, E.New("default domain resolver not found: " + defaultOptions.DomainResolver)
 				}
-				if len(transports) == 1 {
-					dnsQueryOptions.Transport = transports[0]
-				} else {
-					dnsQueryOptions.Transports = transports
-				}
+				dnsQueryOptions.Transport = transport
 				resolveFallbackDelay = time.Duration(dialOptions.FallbackDelay)
 			} else {
 				transports := dnsTransport.Transports()
 				if len(transports) < 2 {
-					dnsQueryOptions.Transport = dnsTransport.Defaults()[0]
+					dnsQueryOptions.Transport = dnsTransport.Default()
 				} else if options.NewDialer {
 					return nil, E.New("missing domain resolver for domain server address")
 				} else {
@@ -153,7 +137,7 @@ func NewWithOptions(options Options) (N.Dialer, error) {
 			options.Context,
 			dialer,
 			dialOptions.Detour == "" && !dialOptions.TCPFastOpen,
-			servers,
+			server,
 			dnsQueryOptions,
 			resolveFallbackDelay,
 		)

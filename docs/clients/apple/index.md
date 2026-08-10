@@ -49,4 +49,4 @@ Additional features:
 
 ## :material-source-repository: Source code
 
-* [GitHub](https://github.com/sjnhnp/sing-box)
+* [GitHub](https://github.com/SagerNet/sing-box-for-apple)

@@ -47,7 +47,7 @@ icon: material/new-box
   "tcp_keep_alive_interval": "",
   "udp_fragment": false,
 
-  "domain_resolver": "", // or [] or {}
+  "domain_resolver": "", // or {}
   "network_strategy": "",
   "network_type": [],
   "fallback_network_type": [],
@@ -185,10 +185,7 @@ Set domain resolver to use for resolving domain names.
 
 This option uses the same format as the [route DNS rule action](/configuration/dns/rule_action/#route) without the `action` field.
 
-The `server` field accepts a single DNS server tag or a list of tags, and `server_strategy`
-controls how multiple servers are selected.
-
-Setting this option directly to a string or list is equivalent to setting its `server` field.
+Setting this option directly to a string is equivalent to setting `server` of this options.
 
 | Outbound/Endpoints | Effected domains         |
 |--------------------|--------------------------|
@@ -278,3 +275,4 @@ If set, the requested domain name will be resolved to IP before connect.
 |----------|--------------------------|-------------------------------------------|
 | `direct` | Domain in request        | Take `inbound.domain_strategy` if not set | 
 | others   | Domain in server address | /                                         |
+

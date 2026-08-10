@@ -928,15 +928,15 @@ func TestDNSMatchResponseRuleSetDestinationCIDRUsesDNSResponse(t *testing.T) {
 	rule := dnsRuleForTest(func(rule *abstractDefaultRule) {
 		addRuleSetItem(rule, &RuleSetItem{setList: []adapter.RuleSet{ruleSet}})
 	})
-	rule.matchResponseTag = "x"
+	rule.matchResponse = true
 
 	matchedMetadata := testMetadata("lookup.example")
-	matchedMetadata.NamedDNSResponses = map[string]*mDNS.Msg{"x": dnsResponseForTest(netip.MustParseAddr("203.0.113.1"))}
+	matchedMetadata.DNSResponse = dnsResponseForTest(netip.MustParseAddr("203.0.113.1"))
 	require.True(t, rule.Match(&matchedMetadata))
 	require.Empty(t, matchedMetadata.DestinationAddresses)
 
 	unmatchedMetadata := testMetadata("lookup.example")
-	unmatchedMetadata.NamedDNSResponses = map[string]*mDNS.Msg{"x": dnsResponseForTest(netip.MustParseAddr("8.8.8.8"))}
+	unmatchedMetadata.DNSResponse = dnsResponseForTest(netip.MustParseAddr("8.8.8.8"))
 	require.False(t, rule.Match(&unmatchedMetadata))
 }
 
@@ -947,7 +947,7 @@ func TestDNSMatchResponseMissingResponseUsesBooleanSemantics(t *testing.T) {
 		t.Parallel()
 
 		rule := dnsRuleForTest(func(rule *abstractDefaultRule) {})
-		rule.matchResponseTag = "x"
+		rule.matchResponse = true
 
 		metadata := testMetadata("lookup.example")
 		require.False(t, rule.Match(&metadata))
@@ -959,7 +959,7 @@ func TestDNSMatchResponseMissingResponseUsesBooleanSemantics(t *testing.T) {
 		rule := dnsRuleForTest(func(rule *abstractDefaultRule) {
 			rule.invert = true
 		})
-		rule.matchResponseTag = "x"
+		rule.matchResponse = true
 
 		metadata := testMetadata("lookup.example")
 		require.True(t, rule.Match(&metadata))
@@ -971,7 +971,7 @@ func TestDNSMatchResponseMissingResponseUsesBooleanSemantics(t *testing.T) {
 		nestedRule := dnsRuleForTest(func(rule *abstractDefaultRule) {
 			rule.invert = true
 		})
-		nestedRule.matchResponseTag = "x"
+		nestedRule.matchResponse = true
 
 		logicalRule := &LogicalDNSRule{
 			abstractLogicalRule: abstractLogicalRule{

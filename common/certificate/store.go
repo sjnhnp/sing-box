@@ -27,7 +27,6 @@ type Store struct {
 	storeType                 string
 	systemPool                *x509.CertPool
 	currentPool               *x509.CertPool
-	currentPEM                []string
 	certificate               string
 	certificatePaths          []string
 	certificateDirectoryPaths []string

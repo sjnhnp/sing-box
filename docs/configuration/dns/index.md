@@ -25,8 +25,7 @@ icon: material/alert-decagram
   "dns": {
     "servers": [],
     "rules": [],
-    "final": "", // or []
-    "final_strategy": "",
+    "final": "",
     "strategy": "",
     "disable_cache": false,
     "disable_expire": false,
@@ -52,24 +51,9 @@ icon: material/alert-decagram
 
 #### final
 
-Default DNS server tag or list of server tags.
+Default dns server tag.
 
 The first server will be used if empty.
-
-When multiple servers are configured, `final_strategy` controls how they are selected.
-
-#### final_strategy
-
-!!! question "Since sing-box 1.14.0"
-
-DNS server selection strategy when multiple `final` servers are configured.
-
-Available values:
-
-- `fallback`: Use servers in order and fall back to later servers when needed.
-- `hybrid`: Query servers concurrently and use the first available result.
-
-`fallback` is used by default.
 
 #### strategy
 

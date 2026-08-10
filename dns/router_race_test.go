@@ -13,7 +13,6 @@ import (
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 	R "github.com/sagernet/sing-box/route/rule"
-	"github.com/sagernet/sing/common/json/badoption"
 
 	mDNS "github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -22,6 +21,7 @@ import (
 type fakeDNSTransport struct {
 	tag         string
 	delay       time.Duration
+	immediate   bool
 	rcode       int
 	address     netip.Addr
 	exchangeErr error
@@ -76,6 +76,10 @@ func (t *fakeDNSTransport) Exchange(ctx context.Context, message *mDNS.Msg) (*mD
 }
 
 func (t *fakeDNSTransport) ExchangeAsync(ctx context.Context, message *mDNS.Msg, callback func(response *mDNS.Msg, err error)) {
+	if t.immediate {
+		callback(t.Exchange(ctx, message))
+		return
+	}
 	go func() {
 		callback(t.Exchange(ctx, message))
 	}()
@@ -103,11 +107,8 @@ func (m *fakeDNSTransportManager) Transport(tag string) (adapter.DNSTransport, b
 	return transport, loaded
 }
 
-func (m *fakeDNSTransportManager) Defaults() []adapter.DNSTransport {
-	if m.defaultTransport == nil {
-		return nil
-	}
-	return []adapter.DNSTransport{m.defaultTransport}
+func (m *fakeDNSTransportManager) Default() adapter.DNSTransport {
+	return m.defaultTransport
 }
 
 func (m *fakeDNSTransportManager) FakeIP() adapter.FakeIPTransport {
@@ -193,7 +194,7 @@ func respondRule(responseTag string, race bool, requireSuccess bool) option.DNSR
 		Type: "",
 		DefaultOptions: option.DefaultDNSRule{
 			RawDefaultDNSRule: option.RawDefaultDNSRule{
-				MatchResponse: responseTag,
+				MatchResponse: &option.DNSRuleMatchResponse{Enabled: true, Tag: responseTag},
 			},
 			DNSRuleAction: option.DNSRuleAction{
 				Action: C.RuleActionTypeRespond,
@@ -215,23 +216,8 @@ func routeRule(server string, speculative bool) option.DNSRule {
 			DNSRuleAction: option.DNSRuleAction{
 				Action: C.RuleActionTypeRoute,
 				RouteOptions: option.DNSRouteActionOptions{
-					Server:      badoption.Listable[string]{server},
+					Server:      server,
 					Speculative: speculative,
-				},
-			},
-		},
-	}
-}
-
-func multiRouteRule(strategy string, servers ...string) option.DNSRule {
-	return option.DNSRule{
-		Type: "",
-		DefaultOptions: option.DefaultDNSRule{
-			DNSRuleAction: option.DNSRuleAction{
-				Action: C.RuleActionTypeRoute,
-				RouteOptions: option.DNSRouteActionOptions{
-					Server:         servers,
-					ServerStrategy: strategy,
 				},
 			},
 		},
@@ -288,6 +274,86 @@ func TestDNSRaceFastestWins(t *testing.T) {
 	require.NoError(t, result.err)
 	require.Equal(t, netip.MustParseAddr("192.0.2.2"), responseAddress(t, result.response))
 	require.Less(t, time.Since(startTime), 400*time.Millisecond)
+}
+
+// A race rule whose response completed synchronously (cache hit) before its
+// rule is scanned must commit immediately instead of being blocked by an
+// earlier armed race rule.
+func TestDNSRaceImmediateLaterResponseWins(t *testing.T) {
+	t.Parallel()
+	transportX := &fakeDNSTransport{tag: "x", delay: 200 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.1")}
+	transportY := &fakeDNSTransport{tag: "y", immediate: true, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
+	router := raceTestRouter(t, transportX, transportY)
+	rules := raceTestRules(t, []option.DNSRule{
+		evaluateRule("x", "x", false),
+		evaluateRule("y", "y", false),
+		respondRule("x", true, true),
+		respondRule("y", true, true),
+	})
+	startTime := time.Now()
+	result := raceTestExchange(router, rules)
+	require.NoError(t, result.err)
+	require.Equal(t, netip.MustParseAddr("192.0.2.2"), responseAddress(t, result.response))
+	require.Less(t, time.Since(startTime), 100*time.Millisecond)
+}
+
+// A synchronously completed race rule that misses disarms in place and rule
+// scanning continues; the remaining race rule wins once its response arrives.
+func TestDNSRaceImmediateMissContinues(t *testing.T) {
+	t.Parallel()
+	transportX := &fakeDNSTransport{tag: "x", delay: 100 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.1")}
+	transportY := &fakeDNSTransport{tag: "y", immediate: true, rcode: mDNS.RcodeNameError}
+	router := raceTestRouter(t, transportX, transportY)
+	rules := raceTestRules(t, []option.DNSRule{
+		evaluateRule("x", "x", false),
+		evaluateRule("y", "y", false),
+		respondRule("y", true, true),
+		respondRule("x", true, true),
+	})
+	startTime := time.Now()
+	result := raceTestExchange(router, rules)
+	require.NoError(t, result.err)
+	require.Equal(t, netip.MustParseAddr("192.0.2.1"), responseAddress(t, result.response))
+	require.GreaterOrEqual(t, time.Since(startTime), 90*time.Millisecond)
+}
+
+// A race route rule whose binding completed synchronously must commit its
+// route immediately instead of being blocked by an earlier armed race rule.
+func TestDNSRaceImmediateRouteCommits(t *testing.T) {
+	t.Parallel()
+	transportX := &fakeDNSTransport{tag: "x", delay: 200 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.1")}
+	transportY := &fakeDNSTransport{tag: "y", immediate: true, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
+	transportFinal := &fakeDNSTransport{tag: "final", delay: 10 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.9")}
+	router := raceTestRouter(t, transportX, transportY, transportFinal)
+	successRcode := option.DNSRCode(mDNS.RcodeSuccess)
+	raceRouteRule := option.DNSRule{
+		Type: "",
+		DefaultOptions: option.DefaultDNSRule{
+			RawDefaultDNSRule: option.RawDefaultDNSRule{
+				MatchResponse: &option.DNSRuleMatchResponse{Enabled: true, Tag: "y"},
+				ResponseRcode: &successRcode,
+			},
+			DNSRuleAction: option.DNSRuleAction{
+				Action: C.RuleActionTypeRoute,
+				RouteOptions: option.DNSRouteActionOptions{
+					Server: "final",
+				},
+				Race: true,
+			},
+		},
+	}
+	rules := raceTestRules(t, []option.DNSRule{
+		evaluateRule("x", "x", false),
+		evaluateRule("y", "y", false),
+		respondRule("x", true, true),
+		raceRouteRule,
+	})
+	startTime := time.Now()
+	result := raceTestExchange(router, rules)
+	require.NoError(t, result.err)
+	require.Equal(t, netip.MustParseAddr("192.0.2.9"), responseAddress(t, result.response))
+	require.Equal(t, int32(1), transportFinal.queryCount.Load())
+	require.Less(t, time.Since(startTime), 100*time.Millisecond)
 }
 
 // Without race, rule order decides even when a later response arrives first.
@@ -423,13 +489,13 @@ func TestDNSSpeculativeRouteOnBindingRule(t *testing.T) {
 		Type: "",
 		DefaultOptions: option.DefaultDNSRule{
 			RawDefaultDNSRule: option.RawDefaultDNSRule{
-				MatchResponse: "y",
+				MatchResponse: &option.DNSRuleMatchResponse{Enabled: true, Tag: "y"},
 				ResponseRcode: &successRcode,
 			},
 			DNSRuleAction: option.DNSRuleAction{
 				Action: C.RuleActionTypeRoute,
 				RouteOptions: option.DNSRouteActionOptions{
-					Server:      badoption.Listable[string]{"final"},
+					Server:      "final",
 					Speculative: true,
 				},
 			},
@@ -485,7 +551,7 @@ func TestDNSLogicalRace(t *testing.T) {
 							Type: C.RuleTypeDefault,
 							DefaultOptions: option.DefaultDNSRule{
 								RawDefaultDNSRule: option.RawDefaultDNSRule{
-									MatchResponse: "x",
+									MatchResponse: &option.DNSRuleMatchResponse{Enabled: true},
 									ResponseRcode: &successRcode,
 								},
 							},
@@ -494,7 +560,7 @@ func TestDNSLogicalRace(t *testing.T) {
 							Type: C.RuleTypeDefault,
 							DefaultOptions: option.DefaultDNSRule{
 								RawDefaultDNSRule: option.RawDefaultDNSRule{
-									MatchResponse: "y",
+									MatchResponse: &option.DNSRuleMatchResponse{Enabled: true, Tag: "y"},
 									ResponseRcode: &successRcode,
 								},
 							},
@@ -543,93 +609,4 @@ func TestDNSLogicalRace(t *testing.T) {
 	require.NoError(t, result.err)
 	require.Equal(t, netip.MustParseAddr("192.0.2.3"), responseAddress(t, result.response))
 	require.GreaterOrEqual(t, time.Since(startTime), 240*time.Millisecond)
-}
-
-// A fallback route only queries the second server after the fallback delay:
-// a healthy head server answers alone.
-func TestDNSRouteFallbackHeadOnly(t *testing.T) {
-	t.Parallel()
-	transportX := &fakeDNSTransport{tag: "x", delay: 50 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.1")}
-	transportY := &fakeDNSTransport{tag: "y", delay: 5 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
-	router := raceTestRouter(t, transportX, transportY)
-	rules := raceTestRules(t, []option.DNSRule{
-		multiRouteRule("", "x", "y"),
-	})
-	result := raceTestExchange(router, rules)
-	require.NoError(t, result.err)
-	require.Equal(t, netip.MustParseAddr("192.0.2.1"), responseAddress(t, result.response))
-	require.Equal(t, int32(1), transportX.queryCount.Load())
-	require.Equal(t, int32(0), transportY.queryCount.Load())
-}
-
-// A failed head server promotes the next server immediately, without waiting
-// for the fallback delay. SERVFAIL counts as a failure; NXDOMAIN does not.
-func TestDNSRouteFallbackPromotesOnFailure(t *testing.T) {
-	t.Parallel()
-	transportX := &fakeDNSTransport{tag: "x", delay: 10 * time.Millisecond, rcode: mDNS.RcodeServerFailure}
-	transportY := &fakeDNSTransport{tag: "y", delay: 10 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
-	router := raceTestRouter(t, transportX, transportY)
-	rules := raceTestRules(t, []option.DNSRule{
-		multiRouteRule("", "x", "y"),
-	})
-	startTime := time.Now()
-	result := raceTestExchange(router, rules)
-	require.NoError(t, result.err)
-	require.Equal(t, netip.MustParseAddr("192.0.2.2"), responseAddress(t, result.response))
-	require.Less(t, time.Since(startTime), 250*time.Millisecond)
-
-	transportNX := &fakeDNSTransport{tag: "x", delay: 10 * time.Millisecond, rcode: mDNS.RcodeNameError}
-	transportY = &fakeDNSTransport{tag: "y", delay: 10 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
-	router = raceTestRouter(t, transportNX, transportY)
-	rules = raceTestRules(t, []option.DNSRule{
-		multiRouteRule("", "x", "y"),
-	})
-	result = raceTestExchange(router, rules)
-	require.NoError(t, result.err)
-	require.Equal(t, mDNS.RcodeNameError, result.response.Rcode)
-	require.Equal(t, int32(0), transportY.queryCount.Load())
-}
-
-// A slow head server races against later servers once the fallback delay
-// elapsed, and a recorded fallback removes the delay for subsequent queries
-// until the head server recovers.
-func TestDNSRouteFallbackWindow(t *testing.T) {
-	t.Parallel()
-	transportX := &fakeDNSTransport{tag: "x", delay: 600 * time.Millisecond, exchangeErr: context.DeadlineExceeded}
-	transportY := &fakeDNSTransport{tag: "y", delay: 10 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
-	router := raceTestRouter(t, transportX, transportY)
-	rules := raceTestRules(t, []option.DNSRule{
-		multiRouteRule("", "x", "y"),
-	})
-	startTime := time.Now()
-	result := raceTestExchange(router, rules)
-	require.NoError(t, result.err)
-	require.Equal(t, netip.MustParseAddr("192.0.2.2"), responseAddress(t, result.response))
-	firstElapsed := time.Since(startTime)
-	require.GreaterOrEqual(t, firstElapsed, 290*time.Millisecond)
-	require.Less(t, firstElapsed, 500*time.Millisecond)
-
-	startTime = time.Now()
-	result = raceTestExchange(router, rules)
-	require.NoError(t, result.err)
-	require.Equal(t, netip.MustParseAddr("192.0.2.2"), responseAddress(t, result.response))
-	require.Less(t, time.Since(startTime), 150*time.Millisecond)
-}
-
-// hybrid queries all servers at once and returns the first success.
-func TestDNSRouteHybrid(t *testing.T) {
-	t.Parallel()
-	transportX := &fakeDNSTransport{tag: "x", delay: 200 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.1")}
-	transportY := &fakeDNSTransport{tag: "y", delay: 10 * time.Millisecond, rcode: mDNS.RcodeSuccess, address: netip.MustParseAddr("192.0.2.2")}
-	router := raceTestRouter(t, transportX, transportY)
-	rules := raceTestRules(t, []option.DNSRule{
-		multiRouteRule(C.DNSServerStrategyHybrid, "x", "y"),
-	})
-	startTime := time.Now()
-	result := raceTestExchange(router, rules)
-	require.NoError(t, result.err)
-	require.Equal(t, netip.MustParseAddr("192.0.2.2"), responseAddress(t, result.response))
-	require.Equal(t, int32(1), transportX.queryCount.Load())
-	require.Equal(t, int32(1), transportY.queryCount.Load())
-	require.Less(t, time.Since(startTime), 150*time.Millisecond)
 }

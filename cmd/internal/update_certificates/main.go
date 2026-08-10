@@ -34,8 +34,8 @@ func updateMozillaIncludedRootCAs() error {
 	if err != nil {
 		return err
 	}
-	nameIndex := slices.Index(header, "Certificate Name")
 	geoIndex := slices.Index(header, "Geographic Focus")
+	nameIndex := slices.Index(header, "Common Name or Certificate Name")
 	certIndex := slices.Index(header, "PEM Info")
 
 	generated := strings.Builder{}
@@ -111,8 +111,8 @@ func updateChromeIncludedRootCAs() error {
 	if err != nil {
 		return err
 	}
-	statusIndex := slices.Index(header, "Google Chrome Status")
 	subjectIndex := slices.Index(header, "Subject")
+	statusIndex := slices.Index(header, "Google Chrome Status")
 	certIndex := slices.Index(header, "X.509 Certificate (PEM)")
 	fingerprintIndex := slices.Index(header, "SHA-256 Fingerprint")
 

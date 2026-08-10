@@ -15,10 +15,9 @@ platform-specific function implementation, such as TUN transparent proxy impleme
 
 * [Play Store](https://play.google.com/store/apps/details?id=io.nekohasekai.sfa)
 * [Play Store (Beta)](https://play.google.com/apps/testing/io.nekohasekai.sfa)
-* [GitHub Releases](https://github.com/sjnhnp/sing-box/releases)
-* [GitHub](https://github.com/sjnhnp/sing-box)
+* [GitHub Releases](https://github.com/SagerNet/sing-box/releases)
 * [F-Droid](https://f-droid.org/packages/io.nekohasekai.sfa/) (Unified signature via reproducible builds)
 
 ## :material-source-repository: Source code
 
-* [GitHub](https://github.com/sjnhnp/sing-box)
+* [GitHub](https://github.com/SagerNet/sing-box-for-android)

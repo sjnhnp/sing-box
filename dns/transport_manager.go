@@ -22,7 +22,7 @@ type TransportManager struct {
 	logger                   log.ContextLogger
 	registry                 adapter.DNSTransportRegistry
 	outbound                 adapter.OutboundManager
-	defaultTags              []string
+	defaultTag               string
 	access                   sync.RWMutex
 	started                  bool
 	stage                    adapter.StartStage
@@ -34,12 +34,12 @@ type TransportManager struct {
 	fakeIPTransport          adapter.FakeIPTransport
 }
 
-func NewTransportManager(logger logger.ContextLogger, registry adapter.DNSTransportRegistry, outbound adapter.OutboundManager, defaultTags []string) *TransportManager {
+func NewTransportManager(logger logger.ContextLogger, registry adapter.DNSTransportRegistry, outbound adapter.OutboundManager, defaultTag string) *TransportManager {
 	return &TransportManager{
 		logger:         logger,
 		registry:       registry,
 		outbound:       outbound,
-		defaultTags:    defaultTags,
+		defaultTag:     defaultTag,
 		transportByTag: make(map[string]adapter.DNSTransport),
 		dependByTag:    make(map[string][]string),
 	}
@@ -57,12 +57,9 @@ func (m *TransportManager) Start(stage adapter.StartStage) error {
 	m.started = true
 	m.stage = stage
 	if stage == adapter.StartStateStart {
-		for _, defaultTag := range m.defaultTags {
-			_, loaded := m.transportByTag[defaultTag]
-			if !loaded {
-				m.access.Unlock()
-				return E.New("default DNS server not found: ", defaultTag)
-			}
+		if m.defaultTag != "" && m.defaultTransport == nil {
+			m.access.Unlock()
+			return E.New("default DNS server not found: ", m.defaultTag)
 		}
 		if m.defaultTransport == nil {
 			defaultTransport, err := m.defaultTransportFallback()
@@ -185,25 +182,10 @@ func (m *TransportManager) Transport(tag string) (adapter.DNSTransport, bool) {
 	return outbound, found
 }
 
-func (m *TransportManager) Defaults() []adapter.DNSTransport {
+func (m *TransportManager) Default() adapter.DNSTransport {
 	m.access.RLock()
 	defer m.access.RUnlock()
-	if len(m.defaultTags) > 0 {
-		transports := make([]adapter.DNSTransport, 0, len(m.defaultTags))
-		for _, defaultTag := range m.defaultTags {
-			transport, loaded := m.transportByTag[defaultTag]
-			if loaded {
-				transports = append(transports, transport)
-			}
-		}
-		if len(transports) > 0 {
-			return transports
-		}
-	}
-	if m.defaultTransport == nil {
-		return nil
-	}
-	return []adapter.DNSTransport{m.defaultTransport}
+	return m.defaultTransport
 }
 
 func (m *TransportManager) FakeIP() adapter.FakeIPTransport {
@@ -299,10 +281,7 @@ func (m *TransportManager) Create(ctx context.Context, logger log.ContextLogger,
 	for _, dependency := range dependencies {
 		m.dependByTag[dependency] = append(m.dependByTag[dependency], tag)
 	}
-	if common.Contains(m.defaultTags, tag) && transport.Type() == C.DNSTypeFakeIP {
-		return E.New("default server cannot be fakeip")
-	}
-	if (len(m.defaultTags) > 0 && tag == m.defaultTags[0]) || (len(m.defaultTags) == 0 && m.defaultTransport == nil) {
+	if tag == m.defaultTag || (m.defaultTag == "" && m.defaultTransport == nil) {
 		if transport.Type() == C.DNSTypeFakeIP {
 			return E.New("default server cannot be fakeip")
 		}
