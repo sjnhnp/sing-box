@@ -46,8 +46,6 @@ var (
 
 var errInterfaceIsCellular = E.New("interface is cellular")
 
-var errInterfaceIsCellular = E.New("interface is cellular")
-
 type Transport struct {
 	dns.TransportAdapter
 	ctx               context.Context
