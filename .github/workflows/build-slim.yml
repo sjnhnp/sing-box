@@ -549,20 +549,19 @@ jobs:
       - name: Extract libcronet (Windows)
         if: matrix.os == 'windows'
         working-directory: sing-box
-        shell: bash
         run: |
-          if [ -f "../custom/.github/CRONET_GO_VERSION" ]; then
-            CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
-          else
-            CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
-          fi
-          LIBRARY_PATH="lib/windows_${{ matrix.arch }}/libcronet.dll"
-          git init "$RUNNER_TEMP/cronet-go-lib"
-          git -C "$RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
-          git -C "$RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
-          git -C "$RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
-          git -C "$RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
-          cp "$RUNNER_TEMP/cronet-go-lib/$LIBRARY_PATH" dist/
+          if (Test-Path "../custom/.github/CRONET_GO_VERSION") {
+            $CRONET_GO_VERSION = Get-Content "../custom/.github/CRONET_GO_VERSION"
+          } else {
+            $CRONET_GO_VERSION = Get-Content ".github/CRONET_GO_VERSION"
+          }
+          $LIBRARY_PATH = "lib/windows_${{ matrix.arch }}/libcronet.dll"
+          git init "$env:RUNNER_TEMP/cronet-go-lib"
+          git -C "$env:RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
+          git -C "$env:RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
+          git -C "$env:RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
+          git -C "$env:RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
+          Copy-Item "$env:RUNNER_TEMP/cronet-go-lib/$LIBRARY_PATH" dist
 
       - name: Extract libcronet (Linux)
         if: matrix.os == 'linux'
