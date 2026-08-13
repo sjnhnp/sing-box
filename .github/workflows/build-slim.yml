@@ -551,16 +551,36 @@ jobs:
         working-directory: sing-box
         shell: bash
         run: |
-          CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
-          CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target windows/${{ matrix.arch }} -o dist
+          if [ -f "../custom/.github/CRONET_GO_VERSION" ]; then
+            CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
+          else
+            CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
+          fi
+          LIBRARY_PATH="lib/windows_${{ matrix.arch }}/libcronet.dll"
+          git init "$RUNNER_TEMP/cronet-go-lib"
+          git -C "$RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
+          git -C "$RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
+          git -C "$RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
+          git -C "$RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
+          cp "$RUNNER_TEMP/cronet-go-lib/$LIBRARY_PATH" dist/
 
       - name: Extract libcronet (Linux)
         if: matrix.os == 'linux'
         working-directory: sing-box
         run: |
           set -xeuo pipefail
-          CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
-          CGO_ENABLED=0 go run -v "github.com/sagernet/cronet-go/cmd/build-naive@${CRONET_GO_VERSION}" extract-lib --target linux/${{ matrix.arch }} -o dist
+          if [ -f "../custom/.github/CRONET_GO_VERSION" ]; then
+            CRONET_GO_VERSION=$(cat ../custom/.github/CRONET_GO_VERSION)
+          else
+            CRONET_GO_VERSION=$(cat .github/CRONET_GO_VERSION)
+          fi
+          LIBRARY_PATH="lib/linux_${{ matrix.arch }}/libcronet.so"
+          git init "$RUNNER_TEMP/cronet-go-lib"
+          git -C "$RUNNER_TEMP/cronet-go-lib" remote add origin https://github.com/sagernet/cronet-go.git
+          git -C "$RUNNER_TEMP/cronet-go-lib" sparse-checkout set --no-cone "/$LIBRARY_PATH"
+          git -C "$RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
+          git -C "$RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
+          cp "$RUNNER_TEMP/cronet-go-lib/$LIBRARY_PATH" dist/
 
       - name: Android - Checkout Client
         if: matrix.type == 'android'
