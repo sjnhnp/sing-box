@@ -15,6 +15,7 @@ on:
         options:
           - alpha
           - beta
+          - rc
           - stable
           - all
       platform:
@@ -160,11 +161,15 @@ jobs:
              # Find latest beta (tag contains -beta but not -alpha)
              LATEST_BETA=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type=="object") | .tag_name | select(type=="string" and contains("-beta") and (contains("-alpha") | not))' | head -n 1 || echo "")
              
+             # Find latest rc (tag contains -rc but not -alpha or -beta)
+             LATEST_RC=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type=="object") | .tag_name | select(type=="string" and contains("-rc") and (contains("-alpha") | not) and (contains("-beta") | not))' | head -n 1 || echo "")
+             
              # Find latest stable (no prerelease suffix)
              LATEST_STABLE=$(echo "$RELEASES_JSON" | jq -r '.[] | select(type=="object") | .tag_name | select(type=="string" and (test("-alpha|-beta|-rc") | not))' | head -n 1 || echo "")
              
              echo "Latest Alpha: $LATEST_ALPHA"
              echo "Latest Beta: $LATEST_BETA"
+             echo "Latest RC: $LATEST_RC"
              echo "Latest Stable: $LATEST_STABLE"
              
              MODE="${{ inputs.mode }}"
@@ -178,6 +183,12 @@ jobs:
                 if [ -n "$LATEST_BETA" ] && [ "$LATEST_BETA" != "null" ]; then
                   VER=$(echo "$LATEST_BETA" | sed 's/^v//')
                   add_version "$VER" "$LATEST_BETA" true
+                fi
+             fi
+             if [[ "$MODE" == "rc" || "$MODE" == "all" ]]; then
+                if [ -n "$LATEST_RC" ] && [ "$LATEST_RC" != "null" ]; then
+                  VER=$(echo "$LATEST_RC" | sed 's/^v//')
+                  add_version "$VER" "$LATEST_RC" true
                 fi
              fi
              if [[ "$MODE" == "stable" || "$MODE" == "all" ]]; then
