@@ -176,22 +176,24 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
 		return nil, E.New("unknown quic congestion control: ", options.QUICCongestionControl)
 	}
 	client, err := cronet.NewNaiveClient(cronet.NaiveClientOptions{
-		Context:                 ctx,
-		Logger:                  logger,
-		ServerAddress:           serverAddress,
-		ServerName:              serverName,
-		Username:                options.Username,
-		Password:                options.Password,
-		InsecureConcurrency:     options.InsecureConcurrency,
-		ExtraHeaders:            extraHeaders,
-		TrustedRootCertificates: trustedRootCertificates,
-		Dialer:                  outboundDialer,
-		DNSResolver:             dnsResolver,
-		ECHEnabled:              echEnabled,
-		ECHConfigList:           echConfigList,
-		ECHQueryServerName:      echQueryServerName,
-		QUIC:                    options.QUIC,
-		QUICCongestionControl:   quicCongestionControl,
+		Context:                  ctx,
+		Logger:                   logger,
+		ServerAddress:            serverAddress,
+		ServerName:               serverName,
+		Username:                 options.Username,
+		Password:                 options.Password,
+		InsecureConcurrency:      options.InsecureConcurrency,
+		ExtraHeaders:             extraHeaders,
+		ReceiveWindow:            options.ReceiveWindow.Value(),
+		TrustedRootCertificates:  trustedRootCertificates,
+		Dialer:                   outboundDialer,
+		DNSResolver:              dnsResolver,
+		ECHEnabled:               echEnabled,
+		ECHConfigList:            echConfigList,
+		ECHQueryServerName:       echQueryServerName,
+		QUIC:                     options.QUIC,
+		QUICCongestionControl:    quicCongestionControl,
+		QUICSessionReceiveWindow: options.QUICSessionReceiveWindow.Value(),
 	})
 	if err != nil {
 		return nil, err
@@ -254,7 +256,7 @@ func (h *Outbound) ListenPacket(ctx context.Context, destination M.Socksaddr) (n
 	return h.uotClient.ListenPacket(ctx, destination)
 }
 
-func (h *Outbound) InterfaceUpdated() {
+func (h *Outbound) InterfaceUpdated(ctx context.Context) {
 	h.client.Engine().CloseAllConnections()
 }
 

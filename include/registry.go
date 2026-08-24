@@ -29,7 +29,7 @@ import (
 	"github.com/sagernet/sing-box/protocol/naive"
 	"github.com/sagernet/sing-box/protocol/redirect"
 	"github.com/sagernet/sing-box/protocol/shadowsocks"
- // Removed: github.com/sagernet/sing-box/protocol/shadowtls - not used
+	"github.com/sagernet/sing-box/protocol/shadowtls"
 	"github.com/sagernet/sing-box/protocol/snell"
 	"github.com/sagernet/sing-box/protocol/socks"
  // Removed: github.com/sagernet/sing-box/protocol/ssh - not used
