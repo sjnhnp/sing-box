@@ -57,7 +57,6 @@ import (
 	"github.com/sagernet/tailscale/tailcfg"
 	"github.com/sagernet/tailscale/tsnet"
 	"github.com/sagernet/tailscale/types/nettype"
-	"github.com/sagernet/tailscale/util/dnsname"
 	"github.com/sagernet/tailscale/version"
 	"github.com/sagernet/tailscale/wgengine"
 	"github.com/sagernet/tailscale/wgengine/router"

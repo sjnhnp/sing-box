@@ -140,17 +140,6 @@ func (s *URLTest) InterfaceUpdated(ctx context.Context) {
 	}()
 }
 
-func (s *URLTest) InterfaceUpdated() {
-	group := s.group
-	if group == nil {
-		return
-	}
-	if group.pause.IsDevicePaused() || group.pause.IsNetworkPaused() {
-		return
-	}
-	go group.CheckOutbounds(true)
-}
-
 func (s *URLTest) DialContext(ctx context.Context, network string, destination M.Socksaddr) (net.Conn, error) {
 	s.group.Touch()
 	var outbound adapter.Outbound
