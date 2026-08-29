@@ -121,16 +121,6 @@ QUIC 初始会话接收窗口。
 
 默认使用 `15 MB`。
 
-#### quic_session_receive_window
-
-!!! note ""
-
-    仅在 `quic` 启用时使用。
-
-QUIC 初始会话接收窗口。
-
-默认使用 `15 MB`。
-
 #### tls
 
 ==必填==

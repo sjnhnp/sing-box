@@ -121,16 +121,6 @@ The initial QUIC session receive window.
 
 `15 MB` is used by default.
 
-#### quic_session_receive_window
-
-!!! note ""
-
-    Only used when `quic` is enabled.
-
-The initial QUIC session receive window.
-
-`15 MB` is used by default.
-
 #### tls
 
 ==Required==
