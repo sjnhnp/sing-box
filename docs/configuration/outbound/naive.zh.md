@@ -109,7 +109,17 @@ QUIC 拥塞控制算法。
 | `cubic` | CUBIC |
 | `reno` | New Reno |
 
-默认使用 `bbr`（NaiveProxy 基于的 Chromium 使用的 QUICHE 的默认值）。
+默认使用 `cubic`（NaiveProxy 基于的 Chromium 的默认值）。
+
+#### quic_session_receive_window
+
+!!! note ""
+
+    仅在 `quic` 启用时使用。
+
+QUIC 初始会话接收窗口。
+
+默认使用 `15 MB`。
 
 #### quic_session_receive_window
 
