@@ -429,10 +429,6 @@ jobs:
               cp custom/go.mod sing-box/go.mod || true
               cp custom/go.sum sing-box/go.sum || true
               cp custom/box.go sing-box/box.go || true
-              echo "Purging non-whitelisted protocol directories in slim mode..."
-              for proto in anytls bridge cloudflare hysteria openconnect openvpn shadowtls snell ssh tailscale tor tuic wireguard; do
-                rm -rf "sing-box/protocol/$proto"
-              done
               export OUTPUT_DIR="sing-box/include"
               chmod +x custom/.github/scripts/generate-registry.sh
               bash custom/.github/scripts/generate-registry.sh
