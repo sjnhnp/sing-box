@@ -192,7 +192,7 @@ func NewEndpoint(ctx context.Context, router adapter.Router, logger log.ContextL
 	taildropDirectory = filemanager.BasePath(ctx, os.ExpandEnv(taildropDirectory))
 	taildropDirectory, _ = filepath.Abs(taildropDirectory)
 	return &Endpoint{
-		Adapter:           endpoint.NewAdapter(C.TypeTailscale, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, nil),
+		Adapter:           endpoint.NewAdapterWithDialerOptions(C.TypeTailscale, tag, []string{N.NetworkTCP, N.NetworkUDP, N.NetworkICMP}, options.DialerOptions),
 		ctx:               ctx,
 		router:            router,
 		logger:            logger,
@@ -953,7 +953,7 @@ func (t *Endpoint) PreferredDomain(metadata *adapter.InboundContext, domain stri
 		}
 	}
 	for _, suffix := range t.routeSuffixes.Load() {
-		if mDNS.IsSubDomain(suffix, domain) {
+		if matchDomainSuffix(domain, suffix) {
 			return true
 		}
 	}
@@ -1000,7 +1000,7 @@ func (t *Endpoint) onReconfig(cfg *wgcfg.Config, routerCfg *router.Config, dnsCf
 	}
 	routeSuffixes := make([]string, 0, len(dnsCfg.Routes))
 	for fqdn := range dnsCfg.Routes {
-		routeSuffixes = append(routeSuffixes, fqdn.WithoutTrailingDot())
+		routeSuffixes = append(routeSuffixes, strings.ToLower(fqdn.WithoutTrailingDot()))
 	}
 	t.routeDomains.Store(routeDomains)
 	t.routeSuffixes.Store(routeSuffixes)
