@@ -155,17 +155,20 @@ OUTBOUND_START
 OUTBOUND_END
 
     # EndpointRegistry function
-    cat >> "${OUTPUT_DIR}/registry.go" << 'ENDPOINT'
+    cat >> "${OUTPUT_DIR}/registry.go" << 'ENDPOINT_START'
 func EndpointRegistry() *endpoint.Registry {
 	registry := endpoint.NewRegistry()
 
-	registerWireGuardEndpoint(registry)
-	registerTailscaleEndpoint(registry)
+ENDPOINT_START
 
+    [[ "$PROTO_WIREGUARD" == "true" ]] && echo '	registerWireGuardEndpoint(registry)' >> "${OUTPUT_DIR}/registry.go"
+    [[ "$PROTO_TAILSCALE" == "true" ]] && echo '	registerTailscaleEndpoint(registry)' >> "${OUTPUT_DIR}/registry.go"
+
+    cat >> "${OUTPUT_DIR}/registry.go" << 'ENDPOINT_END'
 	return registry
 }
 
-ENDPOINT
+ENDPOINT_END
 
     # DNSTransportRegistry function
     cat >> "${OUTPUT_DIR}/registry.go" << 'DNS'
@@ -191,14 +194,18 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 DNS
 
     # ServiceRegistry function
-    cat >> "${OUTPUT_DIR}/registry.go" << 'SERVICE'
+    cat >> "${OUTPUT_DIR}/registry.go" << 'SERVICE_START'
 func ServiceRegistry() *service.Registry {
 	registry := service.NewRegistry()
 
 	resolved.RegisterService(registry)
 	ssmapi.RegisterService(registry)
 
-	registerDERPService(registry)
+SERVICE_START
+
+    [[ "$PROTO_TAILSCALE" == "true" ]] && echo '	registerDERPService(registry)' >> "${OUTPUT_DIR}/registry.go"
+
+    cat >> "${OUTPUT_DIR}/registry.go" << 'SERVICE_END'
 	registerCCMService(registry)
 	registerOCMService(registry)
 	registerOOMKillerService(registry)
@@ -206,21 +213,25 @@ func ServiceRegistry() *service.Registry {
 	return registry
 }
 
-SERVICE
+SERVICE_END
 
     # CertificateProviderRegistry function
-    cat >> "${OUTPUT_DIR}/registry.go" << 'CERTPROVIDER'
+    cat >> "${OUTPUT_DIR}/registry.go" << 'CERTPROVIDER_START'
 func CertificateProviderRegistry() *certificate.Registry {
 	registry := certificate.NewRegistry()
 
 	registerACMECertificateProvider(registry)
-	registerTailscaleCertificateProvider(registry)
+CERTPROVIDER_START
+
+    [[ "$PROTO_TAILSCALE" == "true" ]] && echo '	registerTailscaleCertificateProvider(registry)' >> "${OUTPUT_DIR}/registry.go"
+
+    cat >> "${OUTPUT_DIR}/registry.go" << 'CERTPROVIDER_END'
 	originca.RegisterCertificateProvider(registry)
 
 	return registry
 }
 
-CERTPROVIDER
+CERTPROVIDER_END
 
     # Stub functions
     cat >> "${OUTPUT_DIR}/registry.go" << 'STUBS'
