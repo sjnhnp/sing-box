@@ -33,7 +33,9 @@ Copy-Item ".github\workflowsuild-slim.yml" -Destination "$backupDir\.github\wor
 Copy-Item ".github\workflows\sync-upstream-preserve.yml" -Destination "$backupDir\.github\workflows\sync-upstream-preserve.yml" -ErrorAction SilentlyContinue
 Copy-Item ".github\scripts\generate-registry.sh" -Destination "$backupDir\.github\scripts\generate-registry.sh"
 Copy-Item "README.md" -Destination "$backupDir\README.md" -ErrorAction SilentlyContinue
-Copy-Item "includeegistry.go" -Destination "$backupDir\includeegistry.go"
+Copy-Item "include
+egistry.go" -Destination "$backupDir\include
+egistry.go"
 Copy-Item "include\quic.go" -Destination "$backupDir\include\quic.go"
 Copy-Item "include\quic_stub.go" -Destination "$backupDir\include\quic_stub.go"
 Copy-Item "protocol\hysteria2\outbound.go" -Destination "$backupDir\protocol\hysteria2\outbound.go"
@@ -73,7 +75,8 @@ if (Test-Path "$backupDir\README.md") { Copy-Item "$backupDir\README.md" -Destin
 $hy2Path = "protocol\hysteria2\outbound.go"
 if (Test-Path $hy2Path) {
     $hy2Content = Get-Content $hy2Path -Raw
-    $hy2Content = $hy2Content -replace '(?m)^\s*"github\.com/sagernet/sing-box/protocol/tuic"?
+    $hy2Content = $hy2Content -replace '(?m)^\s*"github\.com/sagernet/sing-box/protocol/tuic"
+?
 ', ''
     $hy2Content = $hy2Content.Replace('(*tuic.Outbound)(nil)', '(*Outbound)(nil)')
     Set-Content -Path $hy2Path -Value $hy2Content -NoNewline
@@ -155,3 +158,4 @@ git push origin testing
 1. `protocol/hysteria2/outbound.go` 是否恢复了 `import .../protocol/tuic`。
 2. `experimental/libbox/native_shell_session.go` 是否丢失了 `with_tailscale` 标签。
 3. `include/registry.go` 是否被上游覆盖重新引入了 `snell`, `bridge`, `openconnect`, `openvpn`, `wireguard`, `tailscale` 等。
+4. `.github/workflows/build-slim.yml` 是否保留 Windows SFW 桌面客户端构建流程（Node 22, pnpm 10, Rust toolchain, 动态自签名证书与 `build_boxdd` 的 `DEFAULT_BUILD_TAGS_WINDOWS` 瘦身标签同步）。

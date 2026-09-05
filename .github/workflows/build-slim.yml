@@ -432,6 +432,8 @@ jobs:
               export OUTPUT_DIR="sing-box/include"
               chmod +x custom/.github/scripts/generate-registry.sh
               bash custom/.github/scripts/generate-registry.sh
+              echo -n "${{ needs.strategy_matrix.outputs.build_tags }},with_purego" > sing-box/release/DEFAULT_BUILD_TAGS_WINDOWS
+              echo -n "${{ needs.strategy_matrix.outputs.build_tags }},with_purego" > sing-box/release/DEFAULT_BUILD_TAGS_OTHERS
               cd sing-box && go mod tidy && cd ..
               ;;
             full)
@@ -481,6 +483,8 @@ jobs:
               export OUTPUT_DIR="sing-box/include"
               chmod +x custom/.github/scripts/generate-registry.sh
               bash custom/.github/scripts/generate-registry.sh
+              echo -n "${{ needs.strategy_matrix.outputs.build_tags }},with_purego" > sing-box/release/DEFAULT_BUILD_TAGS_WINDOWS
+              echo -n "${{ needs.strategy_matrix.outputs.build_tags }},with_purego" > sing-box/release/DEFAULT_BUILD_TAGS_OTHERS
               cd sing-box && go mod tidy && cd ..
               ;;
           esac
@@ -573,6 +577,105 @@ jobs:
           git -C "$env:RUNNER_TEMP/cronet-go-lib" fetch --depth=1 --filter=blob:none origin "$CRONET_GO_VERSION"
           git -C "$env:RUNNER_TEMP/cronet-go-lib" checkout FETCH_HEAD
           Copy-Item "$env:RUNNER_TEMP/cronet-go-lib/$LIBRARY_PATH" dist
+
+      - name: Windows - Checkout Desktop Client
+        if: matrix.os == 'windows'
+        working-directory: sing-box
+        shell: bash
+        run: |
+          rm -rf clients/desktop
+          for i in 1 2 3; do
+            git clone --recurse-submodules -b main https://github.com/SagerNet/sing-box-for-desktop.git clients/desktop && break
+            echo "Clone attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          if [ "${{ github.ref }}" = "refs/heads/testing" ]; then
+            git -C clients/desktop checkout dev || true
+            git -C clients/desktop submodule update --init --recursive
+          fi
+
+      - name: Windows - Setup Rust
+        if: matrix.os == 'windows'
+        uses: dtolnay/rust-toolchain@1.88.0
+        with:
+          targets: ${{ matrix.arch == 'arm64' && 'aarch64-pc-windows-msvc' || 'x86_64-pc-windows-msvc' }}
+
+      - name: Windows - Setup pnpm
+        if: matrix.os == 'windows'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Windows - Setup Node.js
+        if: matrix.os == 'windows'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: |
+            sing-box/clients/desktop/pnpm-lock.yaml
+            sing-box/clients/desktop/dashboard/pnpm-lock.yaml
+
+      - name: Windows - Setup Code Signing
+        if: matrix.os == 'windows'
+        working-directory: sing-box
+        shell: pwsh
+        run: |
+          $p12Secret = "${{ secrets.WINDOWS_CERTIFICATES_P12 }}"
+          $p12Pass = "${{ secrets.WINDOWS_P12_PASSWORD }}"
+          $certPath = Join-Path $env:RUNNER_TEMP "windows-signing.p12"
+          if ([string]::IsNullOrWhiteSpace($p12Secret)) {
+            Write-Host "No commercial certificate in secrets, generating self-signed certificate for SFW..."
+            $p12Pass = "singbox_slim_pass"
+            $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject "CN=sing-box, O=sing-box, C=US" -CertStoreLocation "Cert:\CurrentUser\My"
+            $securePass = ConvertTo-SecureString -String $p12Pass -Force -AsPlainText
+            Export-PfxCertificate -Cert $cert -FilePath $certPath -Password $securePass | Out-Null
+          } else {
+            Write-Host "Using commercial certificate from secrets..."
+            [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($p12Secret))
+          }
+          @{
+            windows = @{
+              certificateFile = $certPath
+              certificatePassword = $p12Pass
+            }
+          } | ConvertTo-Json -Depth 3 | Set-Content -Encoding utf8NoBOM clients/desktop/signing.local.json
+
+      - name: Windows - Update Desktop Version
+        if: matrix.os == 'windows'
+        working-directory: sing-box
+        shell: bash
+        run: |
+          go run -v ./cmd/internal/update_desktop_version --ci --nightly || true
+
+      - name: Windows - Build SFW Client
+        if: matrix.os == 'windows'
+        working-directory: sing-box
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DESKTOP_ARCH="${{ matrix.arch == 'arm64' && 'arm64' || 'x64' }}"
+          pnpm -C clients/desktop install
+          pnpm -C clients/desktop package:win -- "$DESKTOP_ARCH"
+
+      - name: Windows - Prepare SFW Artifacts
+        if: matrix.os == 'windows'
+        working-directory: sing-box
+        shell: pwsh
+        run: |
+          $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
+          $DESKTOP_ARCH = if ("${{ matrix.arch }}" -eq "arm64") { "arm64" } else { "x64" }
+          $sfwArtifacts = @(Get-ChildItem clients/desktop/release/SFW-*.exe -File)
+          if ($sfwArtifacts.Count -gt 0) {
+            $sfw = $sfwArtifacts[0]
+            $targetName = "SFW-${{ matrix.version }}-$DESKTOP_ARCH-$PROTOCOL_MODE.exe"
+            Copy-Item $sfw.FullName "../dist/$targetName"
+            Write-Host "Successfully prepared SFW installer: $targetName"
+          } else {
+            Write-Error "No SFW-*.exe installer found in clients/desktop/release/"
+            exit 1
+          }
 
       - name: Extract libcronet (Linux)
         if: matrix.os == 'linux'
@@ -783,9 +886,11 @@ jobs:
 
             | Platform | File |
             |----------|------|
-            | Android (arm64) | `sing-box-${{ matrix.config.version }}-android-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.apk` |
-            | Windows (amd64) | `sing-box-${{ matrix.config.version }}-windows-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.zip` |
-            | Windows (arm64) | `sing-box-${{ matrix.config.version }}-windows-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.zip` |
+            | Android GUI (arm64) | `sing-box-${{ matrix.config.version }}-android-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.apk` |
+            | Windows GUI (x64) | `SFW-${{ matrix.config.version }}-x64-${{ needs.strategy_matrix.outputs.protocol_mode }}.exe` |
+            | Windows GUI (arm64) | `SFW-${{ matrix.config.version }}-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.exe` |
+            | Windows CLI (amd64) | `sing-box-${{ matrix.config.version }}-windows-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.zip` |
+            | Windows CLI (arm64) | `sing-box-${{ matrix.config.version }}-windows-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.zip` |
             | macOS (Intel) | `sing-box-${{ matrix.config.version }}-darwin-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
             | macOS (Silicon) | `sing-box-${{ matrix.config.version }}-darwin-arm64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
             | Linux (amd64) | `sing-box-${{ matrix.config.version }}-linux-amd64-${{ needs.strategy_matrix.outputs.protocol_mode }}.tar.gz` |
