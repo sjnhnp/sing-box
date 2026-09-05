@@ -611,10 +611,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-          cache-dependency-path: |
-            sing-box/clients/desktop/pnpm-lock.yaml
-            sing-box/clients/desktop/dashboard/pnpm-lock.yaml
 
       - name: Windows - Setup Code Signing
         if: matrix.os == 'windows'
