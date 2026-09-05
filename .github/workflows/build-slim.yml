@@ -664,6 +664,7 @@ jobs:
         working-directory: sing-box
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force "../dist" | Out-Null
           $PROTOCOL_MODE = "${{ needs.strategy_matrix.outputs.protocol_mode }}"
           $DESKTOP_ARCH = if ("${{ matrix.arch }}" -eq "arm64") { "arm64" } else { "x64" }
           $sfwArtifacts = @(Get-ChildItem clients/desktop/release/SFW-*.exe -File)
