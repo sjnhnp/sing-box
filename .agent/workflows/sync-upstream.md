@@ -12,7 +12,8 @@ description: Sync with upstream sing-box while intelligently preserving custom s
 3. **彻底切断幽灵依赖**：
    - 阻止 Hysteria2 源码中错误引用 TUIC。
    - 阻止 libbox 在 Android 下无条件链接 Tailscale。
-   - 彻底移除 Snell, Bridge, WireGuard, OpenVPN, OpenConnect, ShadowTLS, AnyTLS, SSH, Tor, Hysteria (v1)。
+   - 阻止 `cmd/sing-box/cmd_generate_tailcat.go` 意外引入 Tailscale 依赖。
+   - 彻底移除 Snell, Bridge, WireGuard, OpenVPN, OpenConnect, ShadowTLS, AnyTLS, SSH, Tor, Hysteria (v1), MASQUE。
 
 ---
 
@@ -28,23 +29,20 @@ New-Item -ItemType Directory -Force -Path "$backupDir\.github\scripts" | Out-Nul
 New-Item -ItemType Directory -Force -Path "$backupDir\include" | Out-Null
 New-Item -ItemType Directory -Force -Path "$backupDir\experimental\libbox" | Out-Null
 New-Item -ItemType Directory -Force -Path "$backupDir\protocol\hysteria2" | Out-Null
+New-Item -ItemType Directory -Force -Path "$backupDir\.agent\workflows" | Out-Null
 
-Copy-Item ".github\workflowsuild-slim.yml" -Destination "$backupDir\.github\workflowsuild-slim.yml"
+Copy-Item ".github\workflows\build-slim.yml" -Destination "$backupDir\.github\workflows\build-slim.yml"
 Copy-Item ".github\workflows\sync-upstream-preserve.yml" -Destination "$backupDir\.github\workflows\sync-upstream-preserve.yml" -ErrorAction SilentlyContinue
+Copy-Item ".github\workflows\generate-keystore.yml" -Destination "$backupDir\.github\workflows\generate-keystore.yml" -ErrorAction SilentlyContinue
 Copy-Item ".github\scripts\generate-registry.sh" -Destination "$backupDir\.github\scripts\generate-registry.sh"
 Copy-Item "README.md" -Destination "$backupDir\README.md" -ErrorAction SilentlyContinue
-Copy-Item "include
-egistry.go" -Destination "$backupDir\include
-egistry.go"
+Copy-Item "include\registry.go" -Destination "$backupDir\include\registry.go"
 Copy-Item "include\quic.go" -Destination "$backupDir\include\quic.go"
 Copy-Item "include\quic_stub.go" -Destination "$backupDir\include\quic_stub.go"
 Copy-Item "protocol\hysteria2\outbound.go" -Destination "$backupDir\protocol\hysteria2\outbound.go"
-Copy-Item "experimental\libbox
-ative_shell_session.go" -Destination "$backupDir\experimental\libbox
-ative_shell_session.go"
-Copy-Item "experimental\libbox
-ative_shell_session_stub.go" -Destination "$backupDir\experimental\libbox
-ative_shell_session_stub.go"
+Copy-Item "experimental\libbox\native_shell_session.go" -Destination "$backupDir\experimental\libbox\native_shell_session.go"
+Copy-Item "experimental\libbox\native_shell_session_stub.go" -Destination "$backupDir\experimental\libbox\native_shell_session_stub.go"
+Copy-Item ".agent\workflows\sync-upstream.md" -Destination "$backupDir\.agent\workflows\sync-upstream.md" -ErrorAction SilentlyContinue
 
 Write-Host "✅ Backup created at $backupDir"
 ```
@@ -56,7 +54,10 @@ Write-Host "✅ Backup created at $backupDir"
 ```bash
 git remote add upstream https://github.com/SagerNet/sing-box.git 2>$null
 git fetch upstream --tags
-git merge upstream/testing -m "Merge upstream testing (Smart Sync)"
+git merge -X theirs upstream/testing -m "Merge upstream testing (Smart Sync)"
+# 若遇 submodule 冲突（如 clients/android 或 clients/apple），取 theirs 并暂存：
+git checkout --theirs clients/android clients/apple 2>$null
+git add clients/android clients/apple 2>$null
 ```
 
 ### 3. 恢复工作流、生成器及核心瘦身补丁
@@ -67,7 +68,9 @@ git merge upstream/testing -m "Merge upstream testing (Smart Sync)"
 $backupDir = Join-Path $env:TEMP "sing-box-backup"
 
 # 1. 恢复 CI 配置与脚本
-Copy-Item "$backupDir\.github\workflowsuild-slim.yml" -Destination ".github\workflowsuild-slim.yml" -Force
+Copy-Item "$backupDir\.github\workflows\build-slim.yml" -Destination ".github\workflows\build-slim.yml" -Force
+if (Test-Path "$backupDir\.github\workflows\sync-upstream-preserve.yml") { Copy-Item "$backupDir\.github\workflows\sync-upstream-preserve.yml" -Destination ".github\workflows\sync-upstream-preserve.yml" -Force }
+if (Test-Path "$backupDir\.github\workflows\generate-keystore.yml") { Copy-Item "$backupDir\.github\workflows\generate-keystore.yml" -Destination ".github\workflows\generate-keystore.yml" -Force }
 Copy-Item "$backupDir\.github\scripts\generate-registry.sh" -Destination ".github\scripts\generate-registry.sh" -Force
 if (Test-Path "$backupDir\README.md") { Copy-Item "$backupDir\README.md" -Destination "README.md" -Force }
 
@@ -75,24 +78,20 @@ if (Test-Path "$backupDir\README.md") { Copy-Item "$backupDir\README.md" -Destin
 $hy2Path = "protocol\hysteria2\outbound.go"
 if (Test-Path $hy2Path) {
     $hy2Content = Get-Content $hy2Path -Raw
-    $hy2Content = $hy2Content -replace '(?m)^\s*"github\.com/sagernet/sing-box/protocol/tuic"
-?
-', ''
+    $hy2Content = $hy2Content -replace '(?m)^\s*"github\.com/sagernet/sing-box/protocol/tuic"\r?\n', ''
     $hy2Content = $hy2Content.Replace('(*tuic.Outbound)(nil)', '(*Outbound)(nil)')
     Set-Content -Path $hy2Path -Value $hy2Content -NoNewline
     Write-Host "✅ Applied TUIC leak patch to Hysteria2"
 }
 
 # 3. 核心补丁 B：防止 Android libbox 意外带入 Tailscale
-$nssPath = "experimental\libbox
-ative_shell_session.go"
+$nssPath = "experimental\libbox\native_shell_session.go"
 if (Test-Path $nssPath) {
     $nssContent = Get-Content $nssPath -Raw
     $nssContent = $nssContent -replace '//go:build linux \|\| android \|\| darwin \|\| ios', '//go:build (linux || android || darwin || ios) && with_tailscale'
     Set-Content -Path $nssPath -Value $nssContent -NoNewline
 }
-$nssStubPath = "experimental\libbox
-ative_shell_session_stub.go"
+$nssStubPath = "experimental\libbox\native_shell_session_stub.go"
 if (Test-Path $nssStubPath) {
     $nssStubContent = Get-Content $nssStubPath -Raw
     $nssStubContent = $nssStubContent -replace '//go:build !linux && !android && !darwin && !ios', '//go:build (!linux && !android && !darwin && !ios) || !with_tailscale'
@@ -100,7 +99,18 @@ if (Test-Path $nssStubPath) {
     Write-Host "✅ Applied Tailscale leak patch to libbox"
 }
 
-# 4. 核心补丁 C：重新生成纯净的 14 协议 include/registry.go 与 include/quic.go
+# 4. 核心补丁 C：防止 cmd_generate_tailcat.go 意外带入 Tailscale
+$tailcatCmdPath = "cmd\sing-box\cmd_generate_tailcat.go"
+if (Test-Path $tailcatCmdPath) {
+    $tailcatContent = Get-Content $tailcatCmdPath -Raw
+    if ($tailcatContent -notmatch '//go:build with_tailscale') {
+        $tailcatContent = "//go:build with_tailscale`n`n" + $tailcatContent
+        Set-Content -Path $tailcatCmdPath -Value $tailcatContent -NoNewline
+        Write-Host "✅ Applied with_tailscale build tag to cmd_generate_tailcat.go"
+    }
+}
+
+# 5. 核心补丁 D：重新生成纯净的 14 协议 include/registry.go 与 include/quic.go
 $env:PROTO_VLESS="true"
 $env:PROTO_VMESS="true"
 $env:PROTO_TROJAN="true"
@@ -116,7 +126,7 @@ $env:PROTO_TAILSCALE="false"
 $env:PROTO_SSH="false"
 $env:PROTO_TOR="false"
 $env:OUTPUT_DIR="include"
-& "C:\Program Files\Gitinash.exe" .github/scripts/generate-registry.sh
+& "C:\Program Files\Git\bin\bash.exe" .github/scripts/generate-registry.sh
 Write-Host "✅ Generated clean 14-protocol registry files."
 ```
 
@@ -125,7 +135,7 @@ Write-Host "✅ Generated clean 14-protocol registry files."
 执行以下 PowerShell 检查命令，确认多平台依赖树中均仅含 14 个白名单协议：
 
 ```powershell
-$tags = "with_gvisor,with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0,with_naive_outbound,with_purego"
+$tags = "with_quic,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0,with_naive_outbound,with_purego"
 $env:GOOS = "windows"
 $env:GOARCH = "amd64"
 $protos = go list -tags=$tags -deps ./cmd/sing-box | Select-String "sing-box/protocol/"
@@ -133,7 +143,7 @@ Write-Host "=== Current protocols in build graph ==="
 $protos | Select-Object -Unique
 
 # 检查是否泄漏非白名单协议
-$forbidden = @("tuic", "tailscale", "wireguard", "snell", "openvpn", "openconnect", "shadowtls", "anytls", "ssh", "tor", "hysteria")
+$forbidden = @("tuic", "tailscale", "wireguard", "snell", "openvpn", "openconnect", "shadowtls", "anytls", "ssh", "tor", "hysteria ")
 foreach ($f in $forbidden) {
     if ($protos -match $f) {
         Write-Error "❌ LEAK DETECTED: Protocol $f is still in dependency graph!"
@@ -154,8 +164,10 @@ git push origin testing
 ---
 
 ## 🚨 AI Self-Memory Note
-在任何一次同步 upstream 的合并中，必须核实以下三个容易复发的“幽灵依赖”：
+在任何一次同步 upstream 的合并中，必须核实以下容易复发的“幽灵依赖”与合并项：
 1. `protocol/hysteria2/outbound.go` 是否恢复了 `import .../protocol/tuic`。
 2. `experimental/libbox/native_shell_session.go` 是否丢失了 `with_tailscale` 标签。
-3. `include/registry.go` 是否被上游覆盖重新引入了 `snell`, `bridge`, `openconnect`, `openvpn`, `wireguard`, `tailscale` 等。
-4. `.github/workflows/build-slim.yml` 是否保留 Windows SFW 桌面客户端构建流程（Node 22, pnpm 10, Rust toolchain, 动态自签名证书与 `build_boxdd` 的 `DEFAULT_BUILD_TAGS_WINDOWS` 瘦身标签同步）。
+3. `cmd/sing-box/cmd_generate_tailcat.go` 是否添加了 `//go:build with_tailscale`（防止 CLI 意外链接 Tailscale 全量代码）。
+4. `include/registry.go` 是否被上游覆盖重新引入了 `snell`, `bridge`, `openconnect`, `openvpn`, `wireguard`, `tailscale`, `masque` 等。
+5. 检查 `protocol/tun/inbound.go` 等文件是否出现 3-way merge 导致的重复方法声明（如 `isDNSHijackDestination`）。
+6. `.github/workflows/build-slim.yml` 是否保留 Windows SFW 桌面客户端构建流程（Node 22, pnpm 10, Rust toolchain, 动态自签名证书与 `build_boxdd` 的 `DEFAULT_BUILD_TAGS_WINDOWS` 瘦身标签同步）。

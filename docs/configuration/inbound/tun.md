@@ -2,6 +2,12 @@
 icon: material/new-box
 ---
 
+!!! quote "Changes in sing-box 1.15.0"
+
+    :material-plus: [auto_redirect_tproxy_mark](#auto_redirect_tproxy_mark)  
+    :material-plus: [multi_queue](#multi_queue)  
+    :material-delete-clock: [stack](#stack)
+
 !!! quote "Changes in sing-box 1.14.0"
 
     :material-plus: [auto_redirect_tproxy_mark](#auto_redirect_tproxy_mark)  
@@ -120,7 +126,7 @@ icon: material/new-box
 
   ... // UDP NAT Fields
 
-  "stack": "system",
+  "multi_queue": false,
   "include_interface": [
     "lan0"
   ],
@@ -165,6 +171,7 @@ icon: material/new-box
     }
   },
   // Deprecated
+  "stack": "system",
   "gso": false,
   "inet4_address": [
     "172.19.0.1/30"
@@ -261,21 +268,16 @@ How DNS is handled on the TUN interface.
 
 `hijack` adds the following on top of `native`:
 
-*On Linux*: without address rewriting, only DNS sent to non-local
-destinations can be intercepted. Traffic destined to addresses on the host's
-own interfaces (such as `127.0.0.53` or the host's LAN-side IP) is delivered
-through the kernel `local` routing table before any user rule applies, and
-`OUTPUT` NAT cannot redirect packets going through `lo`.
+*On Linux*: DNS sent to addresses on the host's own interfaces (such as
+`127.0.0.53` or the host's LAN-side IP) is not hijacked.
 
-- Without `auto_redirect`, an `iproute2` rule makes port 53 skip the `main`
-  table's specific-route lookup, forcing DNS that would otherwise be
-  delivered through a directly-attached subnet through the TUN. Destination
-  addresses are not rewritten.
-- With `auto_redirect`, port 53 traffic is redirected directly to
+- Without `auto_redirect`, port 53 traffic to directly-attached subnets is
+  also routed through the TUN.
+- With `auto_redirect`, port 53 traffic is redirected to
   [`dns_address`](#dns_address).
 
-*On Windows with [`strict_route`](#strict_route)*: a WFP filter blocks port
-53 traffic going through interfaces other than the TUN.
+*On Windows with [`strict_route`](#strict_route)*: port 53 traffic going
+through interfaces other than the TUN is blocked.
 
 #### dns_address
 
@@ -283,15 +285,12 @@ through the kernel `local` routing table before any user rule applies, and
 
 List of DNS server addresses used by [`dns_mode`](#dns_mode).
 
-When unset, sing-box derives one address per family by taking the next IP after
-the first IPv4/IPv6 entry in [`address`](#address). Connections toward those
-derived addresses are additionally hijacked into the sing-box DNS module,
-equivalent to a [`hijack-dns`](/configuration/route/rule_action/#hijack-dns)
-route action; this preserves the behaviour from before this option was added.
+When unset, the next address after the first IPv4 and IPv6 entry in
+[`address`](#address) is used, and connections to it are handled as a
+[`hijack-dns`](/configuration/route/rule_action/#hijack-dns) route action.
 
-When set, this auto-hijack is not applied; configure an explicit
-[`hijack-dns`](/configuration/route/rule_action/#hijack-dns) route rule if the
-behaviour is still required.
+When set, configure a [`hijack-dns`](/configuration/route/rule_action/#hijack-dns)
+route rule to handle DNS traffic to these addresses.
 
 #### gso
 
@@ -390,7 +389,7 @@ Connection reset mark used by `auto_redirect` pre-matching.
 
 #### auto_redirect_tproxy_mark
 
-!!! question "Since sing-box 1.14.0"
+!!! question "Since sing-box 1.15.0"
 
 Connection TPROXY mark used by the `auto_redirect` iptables backend for IPv6 TCP.
 
@@ -559,15 +558,23 @@ Exclude custom routes when `auto_route` is enabled.
 
 #### endpoint_independent_nat
 
-!!! info ""
+This option has had no effect since sing-box 1.11.0 and can be removed from the configuration.
 
-    This item is only available on the gvisor stack, other stacks are endpoint-independent NAT by default.
-
-Enable endpoint-independent NAT.
-
-Performance may degrade slightly, so it is not recommended to enable on when it is not needed.
+Since sing-box 1.14.0, use [UDP NAT fields](/configuration/shared/udp-nat/)
+to customize the mapping and filtering behavior.
 
 #### stack
+
+!!! failure "Deprecated in sing-box 1.15.0"
+
+    `stack` is deprecated and will be removed in sing-box 1.17.0.
+    Remove the `stack` option to use sing-tun's own TCP/IP stack.
+    See [Migration](/migration/#migrate-tun-stack).
+
+!!! quote "Changes in sing-box 1.15.0"
+
+    Since 1.15.0, sing-tun uses its own TCP/IP stack, with substantial improvements over all previous
+    implementations in peak performance, energy efficiency, and memory usage.
 
 !!! quote "Changes in sing-box 1.8.0"
 
@@ -581,7 +588,13 @@ TCP/IP stack.
 | `gvisor` | Perform L3 to L4 translation using [gVisor](https://github.com/google/gvisor)'s virtual network stack |
 | `mixed`  | Mixed `system` TCP stack and `gvisor` UDP stack                                                       |
 
-Defaults to the `mixed` stack if the gVisor build tag is enabled, otherwise defaults to the `system` stack.
+#### multi_queue
+
+!!! quote ""
+
+    Only supported on Linux, and requires sing-tun's own TCP/IP stack.
+
+Enable multi-queue support based on `IFF_MULTI_QUEUE`, allowing throughput to scale with the number of CPU cores.
 
 #### include_interface
 

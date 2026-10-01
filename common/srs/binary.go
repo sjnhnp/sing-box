@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"io"
 	"net/netip"
+	"slices"
 	"unsafe"
 
 	"github.com/sagernet/sing-box/common/ipset"
@@ -154,7 +155,7 @@ func writeRule(writer varbin.Writer, rule option.HeadlessRule, generateVersion u
 	case C.RuleTypeLogical:
 		return writeLogicalRule(writer, rule.LogicalOptions, generateVersion, mmap)
 	default:
-		panic("unknown rule type: " + rule.Type)
+		return E.New("unknown rule type: ", rule.Type)
 	}
 }
 
@@ -206,7 +207,9 @@ func readDefaultRule(reader varbin.Reader, recover bool, mmap *mmapReader) (rule
 				return
 			}
 			if recover {
-				rule.SourceIPCIDR = common.Map(rule.SourceIPSet.Prefixes(), netip.Prefix.String)
+				rule.SourceIPCIDR = common.Map(rule.SourceIPSet.Prefixes(), func(it netip.Prefix) *badoption.Prefixable {
+					return common.Ptr(badoption.Prefixable(it))
+				})
 			}
 		case ruleItemIPCIDR:
 			if mmap != nil {
@@ -218,7 +221,9 @@ func readDefaultRule(reader varbin.Reader, recover bool, mmap *mmapReader) (rule
 				return
 			}
 			if recover {
-				rule.IPCIDR = common.Map(rule.IPSet.Prefixes(), netip.Prefix.String)
+				rule.IPCIDR = common.Map(rule.IPSet.Prefixes(), func(it netip.Prefix) *badoption.Prefixable {
+					return common.Ptr(badoption.Prefixable(it))
+				})
 			}
 		case ruleItemSourcePort:
 			rule.SourcePort, err = varbin.ReadSlice[uint16](reader, binary.BigEndian)
@@ -340,6 +345,12 @@ func writeDefaultRule(writer varbin.Writer, rule option.DefaultHeadlessRule, gen
 		}
 	}
 	if len(rule.Domain) > 0 || len(rule.DomainSuffix) > 0 || mmap != nil && rule.DomainMatcher != nil {
+		if slices.Contains(rule.Domain, "") {
+			return E.New("domain: empty item is not allowed")
+		}
+		if slices.Contains(rule.DomainSuffix, "") {
+			return E.New("domain_suffix: empty item is not allowed")
+		}
 		err = binary.Write(writer, binary.BigEndian, ruleItemDomain)
 		if err != nil {
 			return err
@@ -621,22 +632,12 @@ func writeRuleItemUint16(writer varbin.Writer, itemType uint8, value []uint16) e
 	return binary.Write(writer, binary.BigEndian, value)
 }
 
-func writeRuleItemCIDR(writer varbin.Writer, itemType uint8, value []string, rawSet *ipset.Set, mmap *mmapWriter) error {
+func writeRuleItemCIDR(writer varbin.Writer, itemType uint8, value []*badoption.Prefixable, rawSet *ipset.Set, mmap *mmapWriter) error {
 	set := rawSet
 	if len(value) > 0 {
 		var builder netipx.IPSetBuilder
-		for i, prefixString := range value {
-			prefix, err := netip.ParsePrefix(prefixString)
-			if err == nil {
-				builder.AddPrefix(prefix)
-				continue
-			}
-			addr, addrErr := netip.ParseAddr(prefixString)
-			if addrErr == nil {
-				builder.Add(addr)
-				continue
-			}
-			return E.Cause(err, "parse [", i, "]")
+		for _, prefixable := range value {
+			builder.AddPrefix(prefixable.Build(netip.Prefix{}))
 		}
 		ipSet, err := builder.IPSet()
 		if err != nil {
@@ -699,7 +700,7 @@ func writeLogicalRule(writer varbin.Writer, logicalRule option.LogicalHeadlessRu
 	case C.LogicalTypeOr:
 		err = binary.Write(writer, binary.BigEndian, uint8(1))
 	default:
-		panic("unknown logical mode: " + logicalRule.Mode)
+		return E.New("unknown logical mode: ", logicalRule.Mode)
 	}
 	if err != nil {
 		return err

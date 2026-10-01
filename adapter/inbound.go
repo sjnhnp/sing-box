@@ -58,6 +58,7 @@ type InboundContext struct {
 
 	RouteRule     string
 	RouteOutbound string
+	OutboundChain []Outbound
 
 	// sniffer
 
@@ -187,6 +188,16 @@ func ContextWithDNSTransportTag(ctx context.Context, transportTag string) contex
 func DNSTransportTagFromContext(ctx context.Context) (string, bool) {
 	transportTag, loaded := ctx.Value((*dnsTransportTagKey)(nil)).(string)
 	return transportTag, loaded
+}
+
+func ContextForMultiplexSession(ctx context.Context) context.Context {
+	var sessionContext InboundContext
+	metadata := ContextFrom(ctx)
+	if metadata != nil {
+		sessionContext.Outbound = metadata.Outbound
+	}
+	ctx = ContextWithDNSTransportTag(ctx, "")
+	return WithContext(ctx, &sessionContext)
 }
 
 func WithContext(ctx context.Context, inboundContext *InboundContext) context.Context {

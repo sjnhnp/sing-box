@@ -34,9 +34,9 @@ import (
 	"github.com/sagernet/sing-box/protocol/vless"
 	"github.com/sagernet/sing-box/protocol/vmess"
 	"github.com/sagernet/sing-box/service/api"
-	originca "github.com/sagernet/sing-box/service/origin_ca"
 	"github.com/sagernet/sing-box/service/resolved"
 	"github.com/sagernet/sing-box/service/ssmapi"
+	originca "github.com/sagernet/sing-box/service/origin_ca"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -72,6 +72,7 @@ func OutboundRegistry() *outbound.Registry {
 	registry := outbound.NewRegistry()
 
 	direct.RegisterOutbound(registry)
+
 	block.RegisterOutbound(registry)
 	protocolDNS.RegisterOutbound(registry)
 
@@ -94,6 +95,7 @@ func OutboundRegistry() *outbound.Registry {
 
 func EndpointRegistry() *endpoint.Registry {
 	registry := endpoint.NewRegistry()
+
 	return registry
 }
 
@@ -111,7 +113,6 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	resolved.RegisterTransport(registry)
 
 	registerQUICTransports(registry)
-
 	return registry
 }
 
@@ -130,7 +131,10 @@ func ServiceRegistry() *service.Registry {
 
 func CertificateProviderRegistry() *certificate.Registry {
 	registry := certificate.NewRegistry()
+
+	registerACMECertificateProvider(registry)
 	originca.RegisterCertificateProvider(registry)
+
 	return registry
 }
 

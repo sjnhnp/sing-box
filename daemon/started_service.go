@@ -20,8 +20,10 @@ import (
 	"github.com/sagernet/sing-box/experimental/locale"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/protocol/group"
+	"github.com/sagernet/sing-box/service/oomkiller"
 	"github.com/sagernet/sing/common"
 	"github.com/sagernet/sing/common/memory"
+	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/observable"
 	"github.com/sagernet/sing/service"
 
@@ -259,15 +261,22 @@ func (s *StartedService) StartOrReloadService(ctx context.Context, profileConten
 		s.instance = nil
 		s.updateStatus(ServiceStatus_STOPPING)
 		s.serviceAccess.Unlock()
+		oomRecorder := service.FromContext[*oomkiller.Recorder](s.ctx)
+		if oomRecorder != nil {
+			oomRecorder.BeginReload()
+			defer oomRecorder.EndReload()
+		}
 		_ = oldInstance.Close()
 		runtimeDebug.FreeOSMemory()
 		s.serviceAccess.Lock()
 	}
 	s.startInterrupted = false
 	s.updateStatus(ServiceStatus_STARTING)
-	s.resetLogs()
+	if oldInstance == nil {
+		s.resetLogs()
+	}
 	s.serviceAccess.Unlock()
-	instance, err := s.newInstance(ctx, profileContent, options)
+	instance, err := s.newInstance(ctx, profileContent, options, oldInstance != nil)
 	if err != nil {
 		s.serviceAccess.Lock()
 		s.updateStatusError(err)
@@ -593,7 +602,9 @@ func (s *StartedService) readGroups() *Groups {
 		g.Tag = iGroup.Tag()
 		g.Type = iGroup.Type()
 		_, g.Selectable = iGroup.(*group.Selector)
-		g.Selected = iGroup.Now()
+		if selected := iGroup.Selected(N.NetworkTCP); selected != nil {
+			g.Selected = selected.Tag()
+		}
 		if boxService.cacheFile != nil {
 			if isExpand, loaded := boxService.cacheFile.LoadGroupExpand(g.Tag); loaded {
 				g.IsExpand = isExpand
@@ -609,7 +620,7 @@ func (s *StartedService) readGroups() *Groups {
 			var item GroupItem
 			item.Tag = itemTag
 			item.Type = itemOutbound.Type()
-			if history := historyStorage.LoadURLTestHistory(group.RealTag(boxService.outboundManager, itemOutbound)); history != nil {
+			if history := historyStorage.LoadURLTestHistory(group.RealTag(itemOutbound, N.NetworkTCP)); history != nil {
 				item.UrlTestTime = history.Time.Unix()
 				item.UrlTestDelay = int32(history.Delay)
 			}
@@ -1047,8 +1058,10 @@ func buildConnectionProto(metadata *trafficcontrol.TrackerMetadata) *Connection 
 			ProcessId:    metadata.Metadata.ProcessInfo.ProcessID,
 			UserId:       metadata.Metadata.ProcessInfo.UserId,
 			UserName:     metadata.Metadata.ProcessInfo.UserName,
-			ProcessPath:  metadata.Metadata.ProcessInfo.ProcessPath,
-			PackageNames: metadata.Metadata.ProcessInfo.AndroidPackageNames,
+			PackageNames: metadata.Metadata.ProcessInfo.PackageNames,
+		}
+		if len(metadata.Metadata.ProcessInfo.ProcessPaths) > 0 {
+			processInfo.ProcessPath = metadata.Metadata.ProcessInfo.ProcessPaths[0]
 		}
 	}
 	return &Connection{
@@ -1169,7 +1182,7 @@ func (s *StartedService) SubscribeOutbounds(_ *emptypb.Empty, server grpc.Server
 					Tag:  ob.Tag(),
 					Type: ob.Type(),
 				}
-				if history := historyStorage.LoadURLTestHistory(group.RealTag(boxService.outboundManager, ob)); history != nil {
+				if history := historyStorage.LoadURLTestHistory(group.RealTag(ob, N.NetworkTCP)); history != nil {
 					item.UrlTestTime = history.Time.Unix()
 					item.UrlTestDelay = int32(history.Delay)
 				}
@@ -1180,7 +1193,7 @@ func (s *StartedService) SubscribeOutbounds(_ *emptypb.Empty, server grpc.Server
 					Tag:  ep.Tag(),
 					Type: ep.Type(),
 				}
-				if history := historyStorage.LoadURLTestHistory(group.RealTag(boxService.outboundManager, ep)); history != nil {
+				if history := historyStorage.LoadURLTestHistory(group.RealTag(ep, N.NetworkTCP)); history != nil {
 					item.UrlTestTime = history.Time.Unix()
 					item.UrlTestDelay = int32(history.Delay)
 				}

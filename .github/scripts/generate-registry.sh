@@ -47,6 +47,7 @@ import (
 	"github.com/sagernet/sing-box/dns/transport/fakeip"
 	"github.com/sagernet/sing-box/dns/transport/hosts"
 	"github.com/sagernet/sing-box/dns/transport/local"
+	"github.com/sagernet/sing-box/dns/transport/mdns"
 	"github.com/sagernet/sing-box/log"
 	"github.com/sagernet/sing-box/option"
 HEADER
@@ -69,6 +70,7 @@ HEADER
     echo '	"github.com/sagernet/sing-box/protocol/tun"' >> "${OUTPUT_DIR}/registry.go"
     [[ "$PROTO_VLESS" == "true" ]] && echo '	"github.com/sagernet/sing-box/protocol/vless"' >> "${OUTPUT_DIR}/registry.go"
     [[ "$PROTO_VMESS" == "true" ]] && echo '	"github.com/sagernet/sing-box/protocol/vmess"' >> "${OUTPUT_DIR}/registry.go"
+    echo '	"github.com/sagernet/sing-box/service/api"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/service/resolved"' >> "${OUTPUT_DIR}/registry.go"
     echo '	"github.com/sagernet/sing-box/service/ssmapi"' >> "${OUTPUT_DIR}/registry.go"
     echo '	originca "github.com/sagernet/sing-box/service/origin_ca"' >> "${OUTPUT_DIR}/registry.go"
@@ -171,7 +173,7 @@ ENDPOINT_START
 ENDPOINT_END
 
     # DNSTransportRegistry function
-    cat >> "${OUTPUT_DIR}/registry.go" << 'DNS'
+    cat >> "${OUTPUT_DIR}/registry.go" << 'DNS_START'
 func DNSTransportRegistry() *dns.TransportRegistry {
 	registry := dns.NewTransportRegistry()
 
@@ -181,33 +183,36 @@ func DNSTransportRegistry() *dns.TransportRegistry {
 	transport.RegisterHTTPS(registry)
 	hosts.RegisterTransport(registry)
 	local.RegisterTransport(registry)
+	mdns.RegisterTransport(registry)
 	fakeip.RegisterTransport(registry)
 	resolved.RegisterTransport(registry)
 
 	registerQUICTransports(registry)
-	registerDHCPTransport(registry)
-	registerTailscaleTransport(registry)
+DNS_START
 
+    [[ "$PROTO_TAILSCALE" == "true" ]] && echo '	registerTailscaleTransport(registry)' >> "${OUTPUT_DIR}/registry.go"
+
+    cat >> "${OUTPUT_DIR}/registry.go" << 'DNS_END'
 	return registry
 }
 
-DNS
+DNS_END
 
     # ServiceRegistry function
     cat >> "${OUTPUT_DIR}/registry.go" << 'SERVICE_START'
 func ServiceRegistry() *service.Registry {
 	registry := service.NewRegistry()
 
+	api.RegisterService(registry)
 	resolved.RegisterService(registry)
 	ssmapi.RegisterService(registry)
 
+	registerQUICServices(registry)
 SERVICE_START
 
     [[ "$PROTO_TAILSCALE" == "true" ]] && echo '	registerDERPService(registry)' >> "${OUTPUT_DIR}/registry.go"
 
     cat >> "${OUTPUT_DIR}/registry.go" << 'SERVICE_END'
-	registerCCMService(registry)
-	registerOCMService(registry)
 	registerOOMKillerService(registry)
 
 	return registry
@@ -264,6 +269,7 @@ package include
 import (
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
+	"github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/dns"
 	"github.com/sagernet/sing-box/dns/transport/quic"
 HEADER
@@ -298,7 +304,15 @@ func registerQUICTransports(registry *dns.TransportRegistry) {
 	quic.RegisterTransport(registry)
 	quic.RegisterHTTP3Transport(registry)
 }
+
 TRANSPORTS
+
+    # registerQUICServices
+    cat >> "${OUTPUT_DIR}/quic.go" << 'SERVICES'
+func registerQUICServices(registry *service.Registry) {
+SERVICES
+    [[ "$PROTO_HYSTERIA2" == "true" ]] && echo '	hysteria2.RegisterRealmService(registry)' >> "${OUTPUT_DIR}/quic.go"
+    echo '}' >> "${OUTPUT_DIR}/quic.go"
 }
 
 # ============================================================================
@@ -313,6 +327,7 @@ package include
 import (
 	"github.com/sagernet/sing-box/adapter/inbound"
 	"github.com/sagernet/sing-box/adapter/outbound"
+	"github.com/sagernet/sing-box/adapter/service"
 	"github.com/sagernet/sing-box/dns"
 )
 
@@ -321,6 +336,8 @@ func registerQUICInbounds(registry *inbound.Registry) {}
 func registerQUICOutbounds(registry *outbound.Registry) {}
 
 func registerQUICTransports(registry *dns.TransportRegistry) {}
+
+func registerQUICServices(registry *service.Registry) {}
 STUB
 }
 

@@ -31,7 +31,6 @@ var oomReportProfiles = []string{
 type oomReportMetadata struct {
 	reportMetadata
 	RecordedAt      string `json:"recordedAt"`
-	EndedAt         string `json:"endedAt,omitempty"`
 	MemoryLimit     string `json:"memoryLimit,omitempty"`
 	MemoryUsage     string `json:"memoryUsage"`
 	AvailableMemory string `json:"availableMemory,omitempty"`
@@ -51,9 +50,6 @@ func OOMRecorderOptions(startedService *daemon.StartedService) oomkiller.Recorde
 				Snapshots:      status.Snapshots,
 			}
 			metadata.StartedAt = status.StartedAt.UTC().Format(time.RFC3339)
-			if !status.EndedAt.IsZero() {
-				metadata.EndedAt = status.EndedAt.UTC().Format(time.RFC3339)
-			}
 			if status.MemoryLimit > 0 {
 				metadata.MemoryLimit = byteformats.FormatMemoryBytes(status.MemoryLimit)
 			}
@@ -164,10 +160,10 @@ func buildOOMConnection(connection *trafficcontrol.TrackerMetadata) oomConnectio
 	}
 	var process string
 	if processInfo := metadata.ProcessInfo; processInfo != nil {
-		if processInfo.ProcessPath != "" {
-			process = processInfo.ProcessPath
-		} else if len(processInfo.AndroidPackageNames) > 0 {
-			process = processInfo.AndroidPackageNames[0]
+		if len(processInfo.ProcessPaths) > 0 {
+			process = processInfo.ProcessPaths[0]
+		} else if len(processInfo.PackageNames) > 0 {
+			process = processInfo.PackageNames[0]
 		}
 		if process == "" {
 			if processInfo.UserId != -1 {

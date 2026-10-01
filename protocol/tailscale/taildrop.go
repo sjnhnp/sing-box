@@ -1,4 +1,4 @@
-//go:build with_gvisor
+//go:build with_tailscale
 
 package tailscale
 
@@ -361,7 +361,7 @@ func validateTaildropFileName(name string) error {
 
 var (
 	taildropExtensionSuffix = regexp.MustCompile(`(\.[a-zA-Z0-9]{0,3}[a-zA-Z][a-zA-Z0-9]{0,3})*$`)
-	taildropNumberSuffix    = regexp.MustCompile(` \([0-9]+\)`)
+	taildropNumberSuffix    = regexp.MustCompile(` \([0-9]+\)$`)
 )
 
 func nextFileName(name string) string {

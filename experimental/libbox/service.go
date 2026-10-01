@@ -143,8 +143,9 @@ func (w *platformInterfaceWrapper) NetworkInterfaces() ([]adapter.NetworkInterfa
 				Addresses: common.Map(iteratorToArray[string](netInterface.Addresses), netip.MustParsePrefix),
 				Flags:     linkFlags(uint32(netInterface.Flags)),
 			},
-			Type:       C.InterfaceType(netInterface.Type),
-			DNSServers: iteratorToArray[string](netInterface.DNSServer),
+			Type:             C.InterfaceType(netInterface.Type),
+			DNSServers:       iteratorToArray[string](netInterface.DNSServer),
+			DNSSearchDomains: iteratorToArray[string](netInterface.DNSSearchDomain),
 			Gateways: common.Filter(common.Map(iteratorToArray[string](netInterface.Gateway), func(it string) netip.Addr {
 				gateway, _ := netip.ParseAddr(it)
 				return gateway.Unmap().WithZone("")
@@ -223,11 +224,15 @@ func (w *platformInterfaceWrapper) FindConnectionOwner(request *adapter.FindConn
 	if err != nil {
 		return nil, err
 	}
+	processPaths := result.processPaths
+	if len(processPaths) == 0 && result.ProcessPath != "" {
+		processPaths = []string{result.ProcessPath}
+	}
 	return &adapter.ConnectionOwner{
-		UserId:              result.UserId,
-		UserName:            result.UserName,
-		ProcessPath:         result.ProcessPath,
-		AndroidPackageNames: result.androidPackageNames,
+		UserId:       result.UserId,
+		UserName:     result.UserName,
+		ProcessPaths: processPaths,
+		PackageNames: result.androidPackageNames,
 	}, nil
 }
 
