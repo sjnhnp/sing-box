@@ -51,22 +51,6 @@ func (c *clientConnection) releaseStream(keepSession bool) {
 	}
 }
 
-type clientConnection struct {
-	*quic.Conn
-	access   sync.Mutex
-	streams  int
-	draining bool
-}
-
-func (c *clientConnection) releaseStream() {
-	c.access.Lock()
-	c.streams--
-	drained := c.draining && c.streams == 0
-	c.access.Unlock()
-	if drained {
-		c.CloseWithError(0, "")
-	}
-}
 
 func NewClient(ctx context.Context, dialer N.Dialer, serverAddr M.Socksaddr, options option.V2RayQUICOptions, tlsConfig tls.Config) (adapter.V2RayClientTransport, error) {
 	quicConfig := &quic.Config{
